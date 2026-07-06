@@ -1,8 +1,8 @@
 """projectionmodels: one group, then the book roll-up.
 
-Fit a persistency curve, project one group's premium and credibility-blended
-claims onto the given monthly membership, then aggregate in-force renewals and a
-new-business case into a book budget.
+Project one group's premium and credibility-blended claims onto the given monthly
+membership, weight by the renewal likelihood supplied by underwriting, then
+aggregate in-force renewals and a new-business case into a book budget.
 
     pip install -e .
     python examples/demo.py
@@ -12,8 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from projectionmodels import (GroupProjection, BookProjection, Persistency, fit_persistency,
-                              new_business, __version__)
+from projectionmodels import GroupProjection, BookProjection, new_business, __version__
 
 pd.set_option("display.width", 120)
 SEASON = np.array([0.92, 0.95, 1.02, 1.05, 1.03, 0.95, 0.93, 0.97, 1.02, 1.06, 1.08, 1.02])
@@ -21,18 +20,13 @@ EXP_MID, PROSP_MID = pd.Timestamp("2025-07-01"), pd.Timestamp("2027-07-01")
 
 print(f"projectionmodels {__version__}\n" + "=" * 74)
 
-# --- persistency fit from a little renewal history, then one group ---------------
-pers = fit_persistency(rate_changes=[0.00, 0.05, 0.08, 0.12, 0.15, 0.20],
-                                renewed=[0.95, 0.92, 0.88, 0.83, 0.79, 0.70])
-print(f"persistency: base retention {pers.base_retention:.3f}, "
-      f"elasticity {pers.rate_elasticity:.3f}  ->  P(renew | +6%) = {pers.probability(0.06):.3f}")
-
+# Renewal likelihood is supplied per group (e.g. from underwriting), not modelled here.
 grpA = GroupProjection(
     prospective_membership=np.linspace(1_850, 1_950, 12).round(), seasonal_factors=SEASON,
     current_premium=4_500_000, current_member_months=21_600, rate_action=0.06, plan_change=-0.02,
     book_pmpm=180.0, claim_trend=0.06, exp_midpoint=EXP_MID, prosp_midpoint=PROSP_MID,
     group_claims=3_800_000, group_member_months=21_600, group_claim_count=6_000,
-    full_credibility_claims=10_000.0, pooling_pmpm=8.0, persistency=pers)
+    full_credibility_claims=10_000.0, pooling_pmpm=8.0, renewal_prob=0.90)
 
 r, c = grpA.result, grpA.result.pmpm
 print("\nGROUP A")
@@ -49,7 +43,7 @@ grpB = GroupProjection(
     current_premium=1_150_000, current_member_months=7_200, rate_action=0.11, plan_change=0.0,
     book_pmpm=175.0, claim_trend=0.06, exp_midpoint=EXP_MID, prosp_midpoint=PROSP_MID,
     group_claims=980_000, group_member_months=7_200, group_claim_count=1_400,
-    full_credibility_claims=10_000.0, pooling_pmpm=6.0, persistency=pers)
+    full_credibility_claims=10_000.0, pooling_pmpm=6.0, renewal_prob=0.83)
 
 nb = new_business(
     book_pmpm=178.0, claim_trend=0.06, exp_midpoint=EXP_MID, prosp_midpoint=PROSP_MID,

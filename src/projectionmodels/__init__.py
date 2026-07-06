@@ -14,7 +14,6 @@ Layers
 ------
     PMPMProjection        credibility-blended, trended, pooled claims PMPM
     PremiumRollforward    stored premium rolled forward by rate action / plan change
-    Persistency           renewal probability vs. the rate action
     GroupProjection       one group: premium + claims + renewal weighting  (loop unit)
     BookProjection        aggregate in-force renewals + new business -> book budget
 
@@ -24,7 +23,7 @@ directly.
 
 Quick start
 -----------
-    from projectionmodels import GroupProjection, BookProjection, Persistency
+    from projectionmodels import GroupProjection, BookProjection
 
     g = GroupProjection(prospective_membership=E, seasonal_factors=s,
                         current_premium=..., current_member_months=...,
@@ -32,12 +31,10 @@ Quick start
                         book_pmpm=..., claim_trend=0.06,
                         exp_midpoint=..., prosp_midpoint=...,
                         group_claims=..., group_member_months=..., group_claim_count=...,
-                        pooling_pmpm=..., persistency=Persistency(0.90, 1.5))
+                        pooling_pmpm=..., renewal_prob=0.90)   # renewal likelihood from underwriting
     book = BookProjection([g_1, g_2, new_biz], labels=[...])
     book.loss_ratio
 """
-# Persistency is a shared primitive and lives in actuarialpy; re-exported here for convenience.
-from actuarialpy import Persistency, fit_persistency
 from .pmpm import PMPMProjection, PMPMResult, project_pmpm
 from .premium import PremiumRollforward, PremiumResult, roll_forward_premium
 from .group import (GroupProjection, GroupProjectionResult, project_group, new_business)
@@ -46,7 +43,6 @@ from .book import BookProjection, BookResult, project_book
 __version__ = "0.1.0"
 
 __all__ = [
-    "Persistency", "fit_persistency",     # re-exported from actuarialpy
     "PMPMProjection", "PMPMResult", "project_pmpm",
     "PremiumRollforward", "PremiumResult", "roll_forward_premium",
     "GroupProjection", "GroupProjectionResult", "project_group", "new_business",

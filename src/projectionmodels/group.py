@@ -13,8 +13,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from actuarialpy import Persistency
-
 from .pmpm import PMPMProjection, PMPMResult
 from .premium import PremiumRollforward, PremiumResult
 
@@ -41,8 +39,8 @@ class GroupProjection:
                  group_pmpm=None, group_claims=None, group_member_months=None,
                  group_claim_count=None, credibility=None, full_credibility_claims=1082.0,
                  pooling_pmpm=0.0, plan_affects_claims=True,
-                 # renewal
-                 renewal_prob=1.0, persistency: Persistency | None = None):
+                 # renewal likelihood -- supplied (e.g. from underwriting), not modelled here
+                 renewal_prob=1.0):
         E = np.asarray(prospective_membership, float)
         s = np.ones_like(E) if seasonal_factors is None else np.asarray(seasonal_factors, float)
         plan_factor = (1.0 + plan_change) if plan_affects_claims else 1.0
@@ -57,9 +55,6 @@ class GroupProjection:
                               group_claim_count=group_claim_count, credibility=credibility,
                               full_credibility_claims=full_credibility_claims,
                               plan_factor=plan_factor, pooling_pmpm=pooling_pmpm)
-
-        if persistency is not None:
-            renewal_prob = float(persistency.probability(rate_action))
 
         premium_m = prem.premium(E)
         claims_m = pmpm.claims(E, s)

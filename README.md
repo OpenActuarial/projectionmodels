@@ -25,7 +25,6 @@ pip install projectionmodels
 | --- | --- |
 | `PMPMProjection` | credibility-blended, trended, plan-adjusted claims PMPM with a pooling load |
 | `PremiumRollforward` | stored premium rolled forward by rate action and plan change |
-| `Persistency` | renewal probability as a function of the rate action (fit from history) |
 | `GroupProjection` | one group: premium + claims + renewal weighting — the unit you loop over the book |
 | `BookProjection` | aggregate in-force renewals + new business into the book budget |
 
@@ -52,19 +51,17 @@ projected = blended · trend · plan_factor + pooling_pmpm · trend
 claims_m  = projected · membership_m · seasonal_m
 ```
 
-**Renewal probability** weights premium and claims equally (a lapsed group books
-neither), so the projected loss ratio is unaffected by it. New business is the same
-`GroupProjection` with `group_pmpm = book_pmpm`, `credibility = 0`, and
-`renewal_prob = close_ratio`.
+**Renewal probability** is supplied per group (e.g. from underwriting) via
+`renewal_prob` — it is an input, not something this package models. It weights
+premium and claims equally (a lapsed group books neither), so the projected loss
+ratio is unaffected. New business is the same `GroupProjection` with
+`group_pmpm = book_pmpm`, `credibility = 0`, and `renewal_prob = close_ratio`.
 
 ## Quick start
 
 ```python
 import numpy as np, pandas as pd
-from projectionmodels import GroupProjection, BookProjection, Persistency
-
-pers = Persistency.from_history(rate_changes=[0.0, 0.08, 0.15],
-                                renewed=[0.95, 0.88, 0.79])
+from projectionmodels import GroupProjection, BookProjection
 
 g = GroupProjection(
     prospective_membership=np.full(12, 1900.0), seasonal_factors=season_factors,
@@ -73,7 +70,7 @@ g = GroupProjection(
     book_pmpm=180.0, claim_trend=0.06,
     exp_midpoint=pd.Timestamp("2025-07-01"), prosp_midpoint=pd.Timestamp("2027-07-01"),
     group_claims=3_800_000, group_member_months=21_600, group_claim_count=6_000,
-    pooling_pmpm=8.0, persistency=pers)
+    pooling_pmpm=8.0, renewal_prob=0.90)   # renewal likelihood from underwriting
 
 book = BookProjection([g, ...], labels=["GroupA", ...])
 book.loss_ratio          # expected book loss ratio
@@ -90,7 +87,6 @@ primitives and depends only downward:
 - `midpoint_trend_factor` — trend to the prospective midpoint
 - `seasonality_factors` / `apply_seasonality` — monthly seasonality
 - `pure_premium` — PMPM
-- `Persistency` / `fit_persistency` — renewal probability (added to `actuarialpy` 0.42)
 
 `pool_losses` / `excess_over_threshold` in `actuarialpy` cap large claims when you
 derive the pooling PMPM upstream.

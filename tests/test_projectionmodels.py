@@ -27,24 +27,6 @@ def test_season_normalisation():
     assert SEASON.mean() == pytest.approx(1.0, abs=0.02)
 
 
-# --- persistency ----------------------------------------------------------------
-def test_persistency_probability_and_clip():
-    p = pm.Persistency(base_retention=0.90, rate_elasticity=1.0)
-    assert float(p.probability(0.10)) == pytest.approx(0.80)
-    assert float(p.probability(0.00)) == pytest.approx(0.90)
-    assert float(p.probability(2.00)) == pytest.approx(0.0)    # clipped at floor
-    assert float(p.probability(-1.0)) == pytest.approx(1.0)    # clipped at cap
-
-
-def test_persistency_from_history_recovers_line():
-    base, elas = 0.95, 1.2
-    rc = np.array([0.0, 0.05, 0.10, 0.15, 0.20])
-    renewed = base - elas * rc                                  # exact line, no noise
-    fit = pm.fit_persistency(rc, renewed)
-    assert fit.base_retention == pytest.approx(base, abs=1e-6)
-    assert fit.rate_elasticity == pytest.approx(elas, abs=1e-6)
-
-
 # --- PMPM projection ------------------------------------------------------------
 def test_pmpm_composition():
     kw = dict(book_pmpm=180.0, claim_trend=0.06, exp_midpoint=EXP_MID, prosp_midpoint=PROSP_MID)
@@ -122,12 +104,6 @@ def test_group_seasonality_preserves_annual_claims():
     # and the seasonal version has the same total as the flat version
     g_flat = _group(seasonal_factors=None).result
     assert g.claims == pytest.approx(g_flat.claims * SEASON.mean(), rel=1e-9)
-
-
-def test_group_persistency_sets_renewal_prob():
-    pers = pm.Persistency(base_retention=0.90, rate_elasticity=1.0)
-    g = _group(rate_action=0.10, persistency=pers).result
-    assert g.renewal_prob == pytest.approx(0.80)
 
 
 # --- book projection ------------------------------------------------------------
