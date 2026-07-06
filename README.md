@@ -1,6 +1,6 @@
 # projectionmodels
 
-[![CI](https://github.com/OpenActuarial/forecastmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/forecastmodels/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/forecastmodels)](https://pypi.org/project/forecastmodels/)
+[![CI](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/projectionmodels)](https://pypi.org/project/projectionmodels/)
 
 Forward projection (budgeting) for a book of business — part of the
 [OpenActuarial](https://openactuarial.org) ecosystem.
