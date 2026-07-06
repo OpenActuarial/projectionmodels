@@ -1,5 +1,7 @@
 # projectionmodels
 
+[![CI](https://github.com/OpenActuarial/forecastmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/forecastmodels/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/forecastmodels)](https://pypi.org/project/forecastmodels/)
+
 Forward projection (budgeting) for a book of business — part of the
 [OpenActuarial](https://openactuarial.org) ecosystem.
 
@@ -9,9 +11,6 @@ membership assumptions — and rolls it forward for planning and budgeting. It s
 beside `ratingmodels` and `lossmodels` on top of the `actuarialpy` primitives layer,
 and depends only **downward** on `actuarialpy` — never sideways on another workflow
 package.
-
-> Dividing line: the moment something computes what you *should charge* rather than
-> what the projection *is*, it belongs in `ratingmodels`, not here.
 
 ## Install
 
