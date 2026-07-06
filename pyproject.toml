@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "projectionmodels"
+version = "0.1.0"
+description = "Forward projection (budgeting) for a book of business: premium roll-forward and credibility-blended, trended, seasonalized claims. Part of the OpenActuarial ecosystem."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Michael Bryant" }]
+keywords = ["actuarial", "insurance", "budgeting", "forecasting", "projection", "PMPM", "loss ratio"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = [
+    "numpy>=1.23",
+    "pandas>=1.5",
+    "actuarialpy>=0.42",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "hypothesis>=6", "build>=1", "twine>=5"]
+
+[project.urls]
+Homepage = "https://github.com/OpenActuarial/projectionmodels"
+Documentation = "https://openactuarial.org/projectionmodels.html"
+Repository = "https://github.com/OpenActuarial/projectionmodels"
+Issues = "https://github.com/OpenActuarial/projectionmodels/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/projectionmodels"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
