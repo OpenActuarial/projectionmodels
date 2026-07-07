@@ -1,26 +1,47 @@
 # Changelog
 
-## 0.1.0
+All notable changes to this project are documented here.
 
-Initial release.
+## [Unreleased]
+
+## [0.2.1] - 2026-07-07
 
 ### Added
 
-- `PMPMProjection` — credibility-blended, trended, plan-adjusted claims PMPM with a
-  large-claim pooling load. Blends the group's own PMPM with the book PMPM at a
-  supplied or claim-count-derived credibility, trends to the prospective midpoint,
-  and applies seasonality onto membership.
-- `PremiumRollforward` — rolls a stored premium forward by rate action and plan
-  change (level per member-month); not rebuilt from loss experience.
-- `GroupProjection` — one group's forward projection: premium roll-forward plus
-  credibility-blended claims on the given monthly membership, weighted by a supplied
-  `renewal_prob` (e.g. from underwriting). The unit to loop over the book.
-- `BookProjection` — aggregates in-force renewals and new business into a book
-  budget: expected premium, claims, and loss ratio by group and by month.
-- `new_business` — projects a sold case with no experience (`credibility=0`) at the
-  manual/book PMPM and a close ratio.
-- Frozen `*Result` dataclasses and lowercase functional wrappers (`project_pmpm`,
-  `project_group`, `project_book`).
-- Built on `actuarialpy` primitives (`credibility_weighted_estimate`,
-  `midpoint_trend_factor`, `seasonality_factors`, `pure_premium`); depends only
-  downward on `actuarialpy`.
+- Expanded the suite to 125 tests covering assumptions, adjustments, lifecycle dates, projection execution, result aggregation, claim workflows, expense workflows, and adapter failures.
+- Added output-level regression tests for every runnable example.
+- Added examples for actuarialpy-estimated assumptions, member-level projections, systematic sensitivities, and underwriting-ready results.
+- Added a 95% coverage threshold to continuous integration.
+
+### Changed
+
+- Reworked all examples around a callable `run_example()` function while preserving direct script execution.
+- `ProjectionResults.summarize()` now automatically resolves numerator and denominator dependencies when only a recalculated metric is requested.
+
+## [0.2.0] - 2026-07-07
+
+### Changed
+
+- Replaced the original health-group budgeting prototype with a general deterministic projection engine.
+- Projection grain is now selected with `projection_keys` and optional `component_keys`.
+- Assumption lookup grain, scenario filters, and result-reporting grain are independent.
+
+### Added
+
+- `ProjectionData`, `ProjectionDataset`, and keyed supporting tables.
+- Monthly, quarterly, and annual `ProjectionHorizon` objects.
+- General `ProjectionModel`, `RollForward`, `Calculation`, `CashFlow`, and `Metric` APIs.
+- Supplied or `actuarialpy`-estimated trend, seasonality, completion, and credibility assumptions.
+- Claim-type projection workflow with supplied membership.
+- PMPM, fixed, percent-of-premium, and percent-of-claims expense projections.
+- Date cohorts, lifecycle dates, renewal-period flags, and partial-period exposure.
+- Scenario adjustments and systematic sensitivities.
+- Grain-aware result aggregation, scenario comparison, and assumption/adjustment audits.
+
+### Removed
+
+- `PMPMProjection`, `PremiumRollforward`, `GroupProjection`, and `BookProjection`.
+
+## [0.1.0] - 2026-01-01
+
+- Initial prototype release.

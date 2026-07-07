@@ -4,36 +4,54 @@ build-backend = "hatchling.build"
 
 [project]
 name = "projectionmodels"
-version = "0.1.0"
-description = "Forward projection (budgeting) for a book of business: premium roll-forward and credibility-blended, trended, seasonalized claims. Part of the OpenActuarial ecosystem."
+version = "0.2.1"
+description = "Deterministic actuarial projections at any tabular grain, with actuarialpy-powered assumptions, scenarios, and grain-aware results."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Michael Bryant" }]
-keywords = ["actuarial", "insurance", "budgeting", "forecasting", "projection", "PMPM", "loss ratio"]
+keywords = [
+  "actuarial",
+  "insurance",
+  "projection",
+  "forecasting",
+  "claims",
+  "credibility",
+  "trend",
+  "seasonality",
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Financial and Insurance Industry",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Office/Business :: Financial",
-    "Topic :: Scientific/Engineering :: Mathematics",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial",
+  "Topic :: Scientific/Engineering :: Mathematics",
 ]
 dependencies = [
-    "numpy>=1.23",
-    "pandas>=1.5",
-    "actuarialpy>=0.40",
+  "numpy>=1.23",
+  "pandas>=1.5",
+  "actuarialpy>=0.42.1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "hypothesis>=6", "build>=1", "twine>=5"]
+dev = [
+  "pytest>=7",
+  "pytest-cov>=4",
+  "hypothesis>=6",
+  "ruff>=0.5",
+  "mypy>=1.8",
+  "pandas-stubs>=2.0",
+  "build>=1",
+  "twine>=5",
+]
 
 [project.urls]
 Homepage = "https://github.com/OpenActuarial/projectionmodels"
@@ -46,3 +64,18 @@ packages = ["src/projectionmodels"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["projectionmodels"]
+warn_unused_ignores = true
+no_implicit_optional = true

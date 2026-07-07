@@ -1,16 +1,21 @@
 # projectionmodels
 
-[![CI](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/projectionmodels)](https://pypi.org/project/projectionmodels/)
+[![CI](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml)
 
-Forward projection (budgeting) for a book of business — part of the
-[OpenActuarial](https://openactuarial.org) ecosystem.
+Deterministic actuarial projections at a caller-selected tabular grain.
 
-`ratingmodels` builds a price from experience. `projectionmodels` does the opposite
-direction: it takes the book **as it is** — stored premiums, historical claims, and
-membership assumptions — and rolls it forward for planning and budgeting. It sits
-beside `ratingmodels` and `lossmodels` on top of the `actuarialpy` primitives layer,
-and depends only **downward** on `actuarialpy` — never sideways on another workflow
-package.
+`projectionmodels` advances members, policies, groups, products, cohorts, rating cells, or other actuarial projection records through time. It coordinates the primitives in [`actuarialpy`](https://github.com/OpenActuarial/actuarialpy) without duplicating them.
+
+## Design
+
+The package keeps four grains independent:
+
+- **Projection grain** — the records projected independently, selected with `projection_keys` and optional `component_keys`.
+- **Assumption grain** — the columns used to look up trend, seasonality, credibility, completion, or another assumption.
+- **Adjustment grain** — scenario filters selecting the records and periods to modify.
+- **Reporting grain** — the columns supplied to `ProjectionResults.summarize()`.
+
+For example, a model can project at `group_id × product_id × claim_type`, use trend at `product_id × claim_type`, apply an adjustment to one `group_id`, and report by product and year.
 
 ## Install
 
@@ -18,74 +23,270 @@ package.
 pip install projectionmodels
 ```
 
-## Layers
-
-| object | role |
-| --- | --- |
-| `PMPMProjection` | credibility-blended, trended, plan-adjusted claims PMPM with a pooling load |
-| `PremiumRollforward` | stored premium rolled forward by rate action and plan change |
-| `GroupProjection` | one group: premium + claims + renewal weighting — the unit you loop over the book |
-| `BookProjection` | aggregate in-force renewals + new business into the book budget |
-
-Each class computes on construction and exposes a frozen `*Result` dataclass via
-`.result`; a lowercase functional form (`project_group`, `project_book`, …) returns
-the result directly.
-
-## What it computes
-
-**Premium** is a stored value rolled forward (not rebuilt from experience), level
-per member-month:
-
-```
-prem_pmpm* = (current_premium / current_member_months) · (1 + rate_action) · (1 + plan_change)
-```
-
-**Claims** are the actuarial piece — a credibility blend of the group's own PMPM and
-the book PMPM, trended, plan-adjusted, and seasonalised onto the given membership:
-
-```
-Z         = limited-fluctuation credibility from the group's claim count
-blended   = Z · group_pmpm + (1 − Z) · book_pmpm
-projected = blended · trend · plan_factor + pooling_pmpm · trend
-claims_m  = projected · membership_m · seasonal_m
-```
-
-**Renewal probability** is supplied per group (e.g. from underwriting) via
-`renewal_prob` — it is an input, not something this package models. It weights
-premium and claims equally (a lapsed group books neither), so the projected loss
-ratio is unaffected. New business is the same `GroupProjection` with
-`group_pmpm = book_pmpm`, `credibility = 0`, and `renewal_prob = close_ratio`.
-
-## Quick start
+## General projection engine
 
 ```python
-import numpy as np, pandas as pd
-from projectionmodels import GroupProjection, BookProjection
+import pandas as pd
+import projectionmodels as pm
 
-g = GroupProjection(
-    prospective_membership=np.full(12, 1900.0), seasonal_factors=season_factors,
-    current_premium=4_500_000, current_member_months=21_600,
-    rate_action=0.06, plan_change=-0.02,
-    book_pmpm=180.0, claim_trend=0.06,
-    exp_midpoint=pd.Timestamp("2025-07-01"), prosp_midpoint=pd.Timestamp("2027-07-01"),
-    group_claims=3_800_000, group_member_months=21_600, group_claim_count=6_000,
-    pooling_pmpm=8.0, renewal_prob=0.90)   # renewal likelihood from underwriting
+records = pm.ProjectionData(
+    pd.DataFrame(
+        {
+            "group_id": ["A", "B"],
+            "product_id": ["PPO", "HMO"],
+            "current_members": [1_000.0, 600.0],
+            "current_premium_pmpm": [525.0, 475.0],
+        }
+    ),
+    projection_keys=["group_id", "product_id"],
+)
 
-book = BookProjection([g, ...], labels=["GroupA", ...])
-book.loss_ratio          # expected book loss ratio
-book.by_group            # per-group expected premium / claims / LR
-book.monthly             # book premium & claims by month
+horizon = pm.ProjectionHorizon(
+    start="2027-01-01",
+    periods=36,
+    frequency="monthly",
+)
+
+model = pm.ProjectionModel(
+    assumptions=pm.AssumptionSet(
+        pm.Assumption("retention_rate", 0.995),
+        pm.TrendAssumption.from_values("premium_trend", 0.05),
+    ),
+    roll_forwards=[
+        pm.RollForward(
+            "members",
+            initial="current_members",
+            formula=lambda x: x.prior("members") * x["retention_rate"],
+            grain=["group_id", "product_id"],
+        ),
+        pm.RollForward(
+            "premium_pmpm",
+            initial="current_premium_pmpm",
+            formula=lambda x: x.prior("premium_pmpm")
+            * (1 + x["premium_trend"]) ** x.year_fraction,
+            grain=["group_id", "product_id"],
+        ),
+    ],
+    calculations=[
+        pm.CashFlow(
+            "premium",
+            formula=lambda x: x["members"] * x["premium_pmpm"],
+            reporting_role="revenue",
+            grain=["group_id", "product_id"],
+        )
+    ],
+)
+
+results = model.project(records, horizon)
+annual = results.summarize(by=["calendar_year", "product_id"])
 ```
 
-## Built on `actuarialpy`
+## Claim projection by claim type
 
-This package adds no primitives of its own — it composes existing `actuarialpy`
-primitives and depends only downward:
+Claim experience may be completed, deseasonalized, credibility blended, trended, reseasonalized, and multiplied by supplied membership.
 
-- `credibility_weighted_estimate` — the credibility blend, `Z·group + (1−Z)·book`
-- `midpoint_trend_factor` — trend to the prospective midpoint
-- `seasonality_factors` / `apply_seasonality` — monthly seasonality
-- `pure_premium` — PMPM
+```python
+experience = pm.ClaimExperience(
+    data=claim_history,
+    projection_keys=["group_id", "product_id"],
+    claim_type_col="claim_type",
+    date_col="incurred_month",
+    claims_col="reported_claims",
+    exposure_col="member_months",
+    valuation_date="2026-12-31",
+)
 
-`pool_losses` / `excess_over_threshold` in `actuarialpy` cap large claims when you
-derive the pooling PMPM upstream.
+completion = pm.CompletionAssumption.from_experience(
+    "claim_completion",
+    claim_transactions,
+    by=["product_id", "claim_type"],
+    origin_col="incurred_month",
+    valuation_col="paid_month",
+    amount_col="paid_claims",
+)
+
+seasonality = pm.SeasonalityAssumption.from_experience(
+    "claim_seasonality",
+    claim_history,
+    by=["product_id", "claim_type"],
+    date_col="incurred_month",
+    value_col="completed_claims",
+    exposure_col="member_months",
+)
+
+trend = pm.TrendAssumption.from_experience(
+    "claim_trend",
+    deseasonalized_history,
+    by=["product_id", "claim_type"],
+    date_col="incurred_month",
+    value_col="deseasonalized_claims",
+    exposure_col="member_months",
+)
+
+credibility = pm.CredibilityAssumption.from_experience(
+    "claim_credibility",
+    base_experience,
+    method="limited_fluctuation",
+    by=["group_id", "product_id", "claim_type"],
+    exposure_col="claim_count",
+    full_credibility_standard=1_082,
+)
+
+projection = pm.ClaimProjection.from_experience(
+    experience,
+    completion=completion,
+    seasonality=seasonality,
+    trend=trend,
+    credibility=credibility,
+    complement=pm.Assumption(
+        "manual_claim_rate",
+        manual_rates,
+        lookup=["product_id", "claim_type"],
+        value_col="manual_claim_pmpm",
+    ),
+    membership=membership,
+    horizon=pm.ProjectionHorizon("2027-01-01", periods=60),
+)
+
+results = projection.project()
+```
+
+`trend`, `seasonality`, `completion`, and `credibility` can instead be supplied directly with each class's `from_values()` or `from_weights()` constructor. Both paths create the same resolved assumption interface.
+
+## Scenarios and adjustments
+
+```python
+adverse = pm.Scenario(
+    "adverse",
+    adjustments=[
+        pm.Adjustment(
+            name="Higher inpatient trend",
+            target="claim_trend",
+            method="add",
+            value=0.02,
+            filters={"claim_type": "inpatient"},
+        ),
+        pm.Adjustment(
+            name="Group A premium change",
+            target="premium_pmpm",
+            method="multiply",
+            value=1.08,
+            filters={"group_id": "A"},
+            effective_from="2027-07-01",
+        ),
+    ],
+)
+
+results = model.project(records, horizon, scenarios=[pm.Scenario("baseline"), adverse])
+comparison = results.compare_scenarios(
+    baseline="baseline",
+    comparison="adverse",
+    by=["calendar_year", "product_id"],
+)
+```
+
+Adjustment methods are `set`, `add`, `multiply`, `floor`, and `cap`. Calculated outputs are not adjustable unless their definition explicitly sets `adjustable=True`.
+
+## Membership and independently grained tables
+
+Supporting tables declare their own keys and are broadcast with validated many-to-one joins.
+
+```python
+dataset = pm.ProjectionDataset(records)
+dataset.add_table(
+    "membership",
+    membership,
+    keys=["group_id", "product_id", "projection_period"],
+)
+```
+
+Entity-level membership can be combined with claim-type rows without requiring the membership table to duplicate each claim type. Result measures carry grain metadata, so total member months are counted once when claim type is omitted from a summary.
+
+## Expenses
+
+`ExpenseProjection` supports:
+
+- `pmpm`
+- `fixed_monthly`
+- `percent_premium`
+- `percent_claims`
+
+Each expense record can have its own trend and scenario adjustments.
+
+## Dates, new business, and renewals
+
+```python
+records = pm.ProjectionData(
+    frame,
+    projection_keys=["group_id", "product_id"],
+    dates=pm.ProjectionDates(
+        entry_date="effective_date",
+        exit_date="termination_date",
+        renewal_date="next_renewal_date",
+        exposure_timing="daily_prorated",
+    ),
+)
+
+records = records.add_date_cohort(
+    pm.DateCohort(
+        name="business_origin",
+        date_col="effective_date",
+        split_date="2027-01-01",
+        before_label="existing",
+        on_or_after_label="new_business",
+    )
+)
+```
+
+Projected rows include `active_fraction`, `is_active`, `duration_month`, `duration_year`, and `is_renewal_period`. Date cohorts remain ordinary columns available to assumptions, scenarios, and result summaries.
+
+## Results and exhibits
+
+`projectionmodels` owns mathematical result aggregation and returns pandas DataFrames. It does not own exhibit formatting.
+
+```python
+summary = results.summarize(
+    by=["scenario", "business_origin", "projection_period", "product_id"]
+)
+```
+
+The summary can be passed to `experiencestudies.underwriting_summary` or another reporting layer. Ratios declared with `aggregation="recalculate"` are recomputed from summarized numerators and denominators rather than averaged. When a caller requests only the ratio, its numerator and denominator are summarized internally and omitted from the returned display unless they were also requested.
+
+## Runnable examples
+
+Every file in `examples/` exposes a `run_example()` function that returns its results and also runs directly as a script. The test suite executes both interfaces and checks numerical invariants.
+
+| Example | Demonstrates |
+|---|---|
+| `general_projection.py` | General roll-forwards, a one-time renewal adjustment, scenario comparison, and audits |
+| `health_claims.py` | Claim-type trends, seasonality, credibility, membership, and grain-aware PMPM summaries |
+| `calculated_assumptions.py` | Completion, trend, seasonality, and credibility estimated through `actuarialpy` |
+| `expenses.py` | PMPM, fixed, percent-of-premium, and percent-of-claims expenses |
+| `date_cohorts.py` | Existing versus new business, partial-period exposure, and renewal flags |
+| `member_level_projection.py` | Member-level expected-value projection with model-point weights |
+| `sensitivity_analysis.py` | Systematic trend sensitivities and scenario comparisons |
+| `underwriting_results.py` | Exhibit-ready premium, claims, expenses, margin, and loss-ratio output |
+
+Run an example from the repository root:
+
+```bash
+PYTHONPATH=src python examples/health_claims.py
+```
+
+## Package boundary
+
+- **actuarialpy** — actuarial mathematics and reusable primitives.
+- **experiencestudies** — experience analyses and actuarial exhibits.
+- **projectionmodels** — deterministic assumption orchestration, projection through time, scenarios, and result aggregation.
+- **risksim** — stochastic simulation.
+
+## Development
+
+```bash
+python -m pip install -e ".[dev]"
+pytest --cov=projectionmodels --cov-report=term-missing --cov-fail-under=95
+ruff check src tests examples
+python -m build
+```
+
+The API is alpha and intentionally does not preserve the original `GroupProjection` prototype.
