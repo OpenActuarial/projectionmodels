@@ -5,10 +5,11 @@ from __future__ import annotations
 import pandas as pd
 
 import projectionmodels as pm
+import projectionmodels.advanced as pma
 
 
 def run_example() -> dict[str, object]:
-    records = pm.ProjectionData(
+    records = pma.ProjectionData(
         pd.DataFrame(
             {
                 "group_id": ["A", "B"],
@@ -20,19 +21,19 @@ def run_example() -> dict[str, object]:
         projection_keys=["group_id", "product_id"],
     )
 
-    model = pm.ProjectionModel(
-        assumptions=pm.AssumptionSet(
+    model = pma.ProjectionModel(
+        assumptions=pma.AssumptionSet(
             pm.Assumption("retention_rate", 0.995),
             pm.TrendAssumption.from_values("premium_trend", 0.05),
         ),
         roll_forwards=[
-            pm.RollForward(
+            pma.RollForward(
                 "members",
                 initial="current_members",
                 formula=lambda x: x.prior("members") * x["retention_rate"],
                 grain=["group_id", "product_id"],
             ),
-            pm.RollForward(
+            pma.RollForward(
                 "premium_pmpm",
                 initial="current_premium_pmpm",
                 formula=lambda x: x.prior("premium_pmpm")
@@ -41,7 +42,7 @@ def run_example() -> dict[str, object]:
             ),
         ],
         calculations=[
-            pm.CashFlow(
+            pma.CashFlow(
                 "premium",
                 formula=lambda x: x["members"] * x["premium_pmpm"],
                 grain=["group_id", "product_id"],

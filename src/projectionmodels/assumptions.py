@@ -161,7 +161,7 @@ class Assumption:
         lookup: str | Iterable[str] | None = None,
         value_col: str | None = None,
         note: str | None = None,
-    ) -> "Assumption":
+    ) -> Assumption:
         """Replace indicated values with an actuarial selection while retaining audit data."""
 
         selected_lookup = _as_tuple(lookup) if lookup is not None else tuple(self.lookup)
@@ -215,7 +215,7 @@ class TrendAssumption(Assumption):
         lookup: str | Iterable[str] | None = None,
         rate_col: str | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> "TrendAssumption":
+    ) -> TrendAssumption:
         return cls(
             name=name,
             values=values,
@@ -237,7 +237,7 @@ class TrendAssumption(Assumption):
         freq: str = "M",
         min_periods: int = 3,
         confidence: float = 0.95,
-    ) -> "TrendAssumption":
+    ) -> TrendAssumption:
         fit_trend = actuarialpy_function("fit_trend")
         groups = _as_tuple(by)
         rows: list[dict[str, Any]] = []
@@ -290,9 +290,19 @@ class TrendAssumption(Assumption):
         )
 
     def factor(self, frame: pd.DataFrame, months: Any) -> pd.Series:
+        """Resolve annual rates and return factors for scalar or row-wise months."""
+
         rates = self.resolve(frame)
         trend_factor = actuarialpy_function("trend_factor")
-        values = trend_factor(rates, months)
+        if np.isscalar(months):
+            resolved_months: Any = float(months)
+        else:
+            resolved_months = np.asarray(months, dtype=float)
+            if resolved_months.ndim != 1 or len(resolved_months) != len(frame):
+                raise ValidationError(
+                    "months must be scalar or contain one value per projection row"
+                )
+        values = trend_factor(rates, resolved_months)
         return pd.Series(values, index=frame.index, name=f"{self.name}_factor")
 
 
@@ -313,7 +323,7 @@ class SeasonalityAssumption(Assumption):
         season_col: str = "season",
         factor_col: str | None = None,
         frequency: str = "M",
-    ) -> "SeasonalityAssumption":
+    ) -> SeasonalityAssumption:
         lookup_fields = _as_tuple(lookup)
         if season_col not in lookup_fields:
             lookup_fields += (season_col,)
@@ -341,7 +351,7 @@ class SeasonalityAssumption(Assumption):
         aggregate: str = "mean",
         min_years: int = 2,
         season_col: str = "season",
-    ) -> "SeasonalityAssumption":
+    ) -> SeasonalityAssumption:
         groups = _as_tuple(by)
         if groups:
             function = actuarialpy_function("seasonality_factors_by")
@@ -371,11 +381,20 @@ class SeasonalityAssumption(Assumption):
             )
             values = factors.rename(name).rename_axis(season_col).reset_index()
         lookup = groups + (season_col,)
-        mean_factor = float(values[name].mean())
-        if not np.isclose(mean_factor, 1.0, atol=1e-6):
-            raise ValidationError(
-                f"calculated seasonality factors have mean {mean_factor:.8f}, not 1.0"
-            )
+        if groups:
+            means = values.groupby(list(groups), dropna=False)[name].mean()
+            invalid = means.loc[~np.isclose(means.to_numpy(dtype=float), 1.0, atol=1e-6)]
+            if not invalid.empty:
+                raise ValidationError(
+                    "calculated seasonality factors are not normalized to 1.0 for "
+                    f"these segments: {invalid.to_dict()}"
+                )
+        else:
+            mean_factor = float(values[name].mean())
+            if not np.isclose(mean_factor, 1.0, atol=1e-6):
+                raise ValidationError(
+                    f"calculated seasonality factors have mean {mean_factor:.8f}, not 1.0"
+                )
         return cls(
             name=name,
             values=values.loc[:, list(lookup) + [name]],
@@ -411,7 +430,7 @@ class CompletionAssumption(Assumption):
         lookup: str | Iterable[str] | None = None,
         development_col: str = "development_month",
         factor_col: str = "completion_factor",
-    ) -> "CompletionAssumption":
+    ) -> CompletionAssumption:
         lookup_fields = _as_tuple(lookup)
         if development_col not in lookup_fields:
             lookup_fields += (development_col,)
@@ -438,38 +457,45 @@ class CompletionAssumption(Assumption):
         tail: float = 1.0,
         on_insufficient: str = "raise",
         development_col: str = "development_month",
-    ) -> "CompletionAssumption":
+    ) -> CompletionAssumption:
         groups = _as_tuple(by)
-        if groups:
-            function = actuarialpy_function("completion_factors_by")
-            values = function(
-                experience,
-                groupby=list(groups),
-                origin_col=origin_col,
-                valuation_col=valuation_col,
-                amount_col=amount_col,
-                cumulative=cumulative,
-                method=method,
-                tail=tail,
-                on_insufficient=on_insufficient,
-                development_name=development_col,
-            )
-        else:
-            make_triangle = actuarialpy_function("make_completion_triangle")
-            completion_factors = actuarialpy_function("completion_factors")
-            triangle = make_triangle(
-                experience,
-                origin_col=origin_col,
-                valuation_col=valuation_col,
-                amount_col=amount_col,
-                cumulative=cumulative,
-            )
-            factors = completion_factors(triangle, method=method, tail=tail)
-            values = (
-                factors.rename("completion_factor")
-                .rename_axis(development_col)
-                .reset_index()
-            )
+        try:
+            if groups:
+                function = actuarialpy_function("completion_factors_by")
+                values = function(
+                    experience,
+                    groupby=list(groups),
+                    origin_col=origin_col,
+                    valuation_col=valuation_col,
+                    amount_col=amount_col,
+                    cumulative=cumulative,
+                    method=method,
+                    tail=tail,
+                    on_insufficient=on_insufficient,
+                    development_name=development_col,
+                )
+            else:
+                make_triangle = actuarialpy_function("make_completion_triangle")
+                completion_factors = actuarialpy_function("completion_factors")
+                triangle = make_triangle(
+                    experience,
+                    origin_col=origin_col,
+                    valuation_col=valuation_col,
+                    amount_col=amount_col,
+                    cumulative=cumulative,
+                )
+                factors = completion_factors(triangle, method=method, tail=tail)
+                values = (
+                    factors.rename("completion_factor")
+                    .rename_axis(development_col)
+                    .reset_index()
+                )
+        except ValueError as exc:
+            raise ValidationError(
+                "unable to estimate completion factors from the supplied experience; "
+                "provide a triangle with at least two overlapping origin and "
+                f"development periods, or change on_insufficient. Details: {exc}"
+            ) from exc
         lookup = groups + (development_col,)
         return cls(
             name=name,
@@ -501,8 +527,15 @@ class CompletionAssumption(Assumption):
         out_col: str | None = None,
     ) -> pd.DataFrame:
         function = actuarialpy_function("apply_completion")
-        factors = self.values
         factor_col = self.value_col or "completion_factor"
+        by_fields = _as_tuple(by)
+        factors = self.values
+        if not by_fields and isinstance(factors, pd.DataFrame):
+            if factors.duplicated([self.development_col]).any():
+                raise ValidationError(
+                    "ungrouped completion factors must be unique by development period"
+                )
+            factors = factors.set_index(self.development_col)[factor_col]
         return function(
             frame,
             factors,
@@ -510,7 +543,7 @@ class CompletionAssumption(Assumption):
             date_col=date_col,
             valuation_date=valuation_date,
             development_col=development_col,
-            by=list(_as_tuple(by)) or None,
+            by=list(by_fields) or None,
             factor_col=factor_col,
             development_name=self.development_col,
             out_col=out_col,
@@ -529,7 +562,7 @@ class CredibilityAssumption(Assumption):
         *,
         lookup: str | Iterable[str] | None = None,
         weight_col: str | None = None,
-    ) -> "CredibilityAssumption":
+    ) -> CredibilityAssumption:
         return cls(
             name=name,
             values=values,
@@ -550,7 +583,7 @@ class CredibilityAssumption(Assumption):
         value_col: str | None = None,
         period_col: str | None = None,
         weight_col: str | None = None,
-    ) -> "CredibilityAssumption":
+    ) -> CredibilityAssumption:
         groups = _as_tuple(by)
         if not groups:
             raise ValidationError("credibility estimation requires at least one risk key")
@@ -585,7 +618,14 @@ class CredibilityAssumption(Assumption):
             ap = require_actuarialpy()
             work = experience.copy()
             risk_col = "__projectionmodels_risk__"
-            work[risk_col] = list(map(tuple, work.loc[:, list(groups)].to_numpy()))
+            risk_map = work.loc[:, list(groups)].drop_duplicates().reset_index(drop=True)
+            risk_map[risk_col] = np.arange(len(risk_map), dtype=int)
+            work = work.merge(
+                risk_map,
+                on=list(groups),
+                how="left",
+                validate="many_to_one",
+            )
             model = ap.BuhlmannStraub.from_frame(
                 work,
                 group=risk_col,
@@ -593,14 +633,13 @@ class CredibilityAssumption(Assumption):
                 weight=weight_col,
                 period=period_col,
             )
-            risk_map = work.loc[:, list(groups) + [risk_col]].drop_duplicates(risk_col)
             z = np.asarray(model.z(model.weights), dtype=float)
             estimates = np.asarray(
                 model.premium(model.risk_means_, model.weights), dtype=float
             )
             grouped = pd.DataFrame(
                 {
-                    risk_col: list(model.groups_),
+                    risk_col: np.asarray(model.groups_, dtype=int),
                     name: z,
                     "credibility_estimate": estimates,
                     "risk_mean": model.risk_means_,
@@ -687,7 +726,7 @@ class AssumptionSet:
                 item = replace(item, name=name)
             self.add(item)
 
-    def add(self, assumption: Assumption) -> "AssumptionSet":
+    def add(self, assumption: Assumption) -> AssumptionSet:
         if assumption.name in self.assumptions:
             raise ValidationError(f"assumption {assumption.name!r} already exists")
         self.assumptions[assumption.name] = assumption

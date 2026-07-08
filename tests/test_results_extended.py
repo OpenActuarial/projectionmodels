@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from projectionmodels import Calculation, Metric, ProjectionResults, ValidationError
+from projectionmodels import ProjectionResults, ValidationError
+from projectionmodels.advanced import Calculation, Metric
 
 
 def make_results() -> ProjectionResults:

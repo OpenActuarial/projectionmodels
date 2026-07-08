@@ -43,6 +43,20 @@ def test_claim_experience_prepare_without_optional_adjustments():
     assert prepared["claims_completed_deseasonalized"].tolist() == [100.0, 120.0]
 
 
+
+def test_claim_experience_midpoint_preserves_datetime_units():
+    experience = ClaimExperience(
+        claim_history(),
+        projection_keys=["group"],
+        claim_type_col="claim_type",
+        date_col="month",
+        claims_col="claims",
+        exposure_col="exposure",
+    )
+    rates = experience.to_base_rates()
+    midpoint = rates["experience_midpoint"].item()
+    assert pd.Timestamp("2026-01-01") <= midpoint <= pd.Timestamp("2026-02-01")
+
 def test_claim_completion_without_development_requires_valuation_date():
     experience = ClaimExperience(
         claim_history(),

@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import actuarialpy as ap
 import numpy as np
 import pandas as pd
 import pytest
 
 from projectionmodels import (
     Assumption,
-    AssumptionResolutionError,
-    AssumptionSet,
     CompletionAssumption,
     CredibilityAssumption,
     SeasonalityAssumption,
     TrendAssumption,
     ValidationError,
 )
+from projectionmodels.advanced import AssumptionSet
+from projectionmodels.exceptions import AssumptionResolutionError
 
 
 def test_assumption_resolves_positional_series_and_array():
@@ -126,11 +127,11 @@ def test_trend_factor_uses_resolved_keyed_rates():
     assert trend.factor(frame, [12, 12]).tolist() == pytest.approx([1.12, 1.0])
 
 
-def test_ungrouped_seasonality_and_completion_estimators():
+def test_ungrouped_seasonality_and_completion_estimators(completion_transactions):
     history = pd.DataFrame(
         {
-            "month": pd.date_range("2025-01-01", periods=24, freq="MS"),
-            "claims": np.arange(24) + 1,
+            "month": pd.date_range("2024-01-01", periods=36, freq="MS"),
+            "claims": 100.0 * (1.005 ** np.arange(36)),
         }
     )
     seasonality = SeasonalityAssumption.from_experience(
@@ -139,33 +140,38 @@ def test_ungrouped_seasonality_and_completion_estimators():
     assert seasonality.lookup == ("season",)
     assert len(seasonality.values) == 12
 
-    transactions = pd.DataFrame(
-        {
-            "origin": pd.to_datetime(["2026-01-01", "2026-02-01"]),
-            "paid": pd.to_datetime(["2026-01-01", "2026-03-01"]),
-            "amount": [50.0, 75.0],
-        }
-    )
+    transactions = completion_transactions.loc[
+        completion_transactions["claim_type"] == "ip",
+        ["incurred_month", "paid_month", "paid_claims"],
+    ]
     completion = CompletionAssumption.from_experience(
         "completion",
         transactions,
-        origin_col="origin",
-        valuation_col="paid",
-        amount_col="amount",
+        origin_col="incurred_month",
+        valuation_col="paid_month",
+        amount_col="paid_claims",
     )
     assert completion.lookup == ("development_month",)
     applied = completion.apply(
-        pd.DataFrame({"development_month": [0, 1], "claims": [75.0, 100.0]}),
+        pd.DataFrame({"development_month": [0, 1, 2], "claims": [50.0, 80.0, 100.0]}),
         value_col="claims",
         development_col="development_month",
     )
-    assert applied["claims_completed"].tolist() == pytest.approx([100.0, 100.0])
+    assert applied["claims_completed"].tolist() == pytest.approx([100.0, 100.0, 100.0])
 
+def test_calculated_seasonality_requires_normalized_factors(monkeypatch):
+    import projectionmodels.assumptions as assumption_module
 
-def test_calculated_seasonality_requires_normalized_factors(fake_actuarialpy):
-    fake_actuarialpy.seasonality_factors = lambda *args, **kwargs: pd.Series(
-        [2.0] * 12, index=pd.Index(range(1, 13), name="season")
-    )
+    real_lookup = assumption_module.actuarialpy_function
+
+    def lookup(name):
+        if name == "seasonality_factors":
+            return lambda *args, **kwargs: pd.Series(
+                [2.0] * 12, index=pd.Index(range(1, 13), name="season")
+            )
+        return real_lookup(name)
+
+    monkeypatch.setattr(assumption_module, "actuarialpy_function", lookup)
     history = pd.DataFrame(
         {
             "month": pd.date_range("2025-01-01", periods=24, freq="MS"),
@@ -219,7 +225,10 @@ def test_buhlmann_and_buhlmann_straub_estimators():
         value_col="rate",
         period_col="year",
     )
-    assert buhlmann.values["z_buhlmann"].eq(0.6).all()
+    direct_buhlmann = ap.Buhlmann.fit(
+        balanced.pivot(index="group", columns="year", values="rate").to_numpy()
+    )
+    assert buhlmann.values["z_buhlmann"].eq(float(direct_buhlmann.z)).all()
     assert buhlmann.metadata["method"] == "buhlmann"
 
     straub = CredibilityAssumption.from_experience(

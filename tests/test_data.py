@@ -1,13 +1,8 @@
 import pandas as pd
 import pytest
 
-from projectionmodels import (
-    DateCohort,
-    ProjectionData,
-    ProjectionDates,
-    ProjectionHorizon,
-    ValidationError,
-)
+from projectionmodels import DateCohort, ProjectionDates, ProjectionHorizon, ValidationError
+from projectionmodels.advanced import ProjectionData
 
 
 def test_projection_keys_must_be_unique():

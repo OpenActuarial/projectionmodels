@@ -3,19 +3,15 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from projectionmodels import (
-    Adjustment,
-    AdjustmentError,
-    Assumption,
+from projectionmodels import Adjustment, Assumption, ProjectionHorizon, Scenario, ValidationError
+from projectionmodels.advanced import (
     Calculation,
     ProjectionData,
     ProjectionDataset,
-    ProjectionHorizon,
     ProjectionModel,
-    Scenario,
     Sensitivity,
-    ValidationError,
 )
+from projectionmodels.exceptions import AdjustmentError
 
 
 def simple_records() -> ProjectionData:

@@ -1,17 +1,14 @@
 import pandas as pd
 import pytest
 
-from projectionmodels import (
-    Adjustment,
-    Assumption,
+from projectionmodels import Adjustment, Assumption, ProjectionHorizon, Scenario
+from projectionmodels.advanced import (
     AssumptionSet,
     Calculation,
     CashFlow,
     ProjectionData,
-    ProjectionHorizon,
     ProjectionModel,
     RollForward,
-    Scenario,
 )
 
 
@@ -89,7 +86,7 @@ def test_supporting_table_broadcasts_to_components_without_changing_rows():
         projection_keys=["group"],
         component_keys=["claim_type"],
     )
-    from projectionmodels import ProjectionDataset
+    from projectionmodels.advanced import ProjectionDataset
 
     dataset = ProjectionDataset(records).add_table(
         "membership",

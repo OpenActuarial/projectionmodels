@@ -37,9 +37,14 @@ def _weighted_midpoint(dates: pd.Series, weights: pd.Series) -> pd.Timestamp:
     valid = dates.notna() & weights.notna() & (weights > 0)
     if not valid.any():
         return pd.NaT
-    values = pd.to_datetime(dates.loc[valid]).astype("int64").to_numpy(dtype=float)
+    values = (
+        pd.to_datetime(dates.loc[valid])
+        .astype("datetime64[ns]")
+        .astype("int64")
+        .to_numpy(dtype=float)
+    )
     w = weights.loc[valid].to_numpy(dtype=float)
-    return pd.Timestamp(int(np.average(values, weights=w)))
+    return pd.to_datetime(int(np.average(values, weights=w)), unit="ns")
 
 
 @dataclass(frozen=True)
@@ -275,7 +280,7 @@ class ClaimProjection:
         membership_col: str = "member_months",
         membership_period_col: str = "projection_period",
         dates: ProjectionDates | None = None,
-    ) -> "ClaimProjection":
+    ) -> ClaimProjection:
         base_rates = experience.to_base_rates(
             completion=completion,
             seasonality=seasonality,

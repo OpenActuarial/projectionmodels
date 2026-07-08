@@ -197,7 +197,7 @@ class ProjectionData:
     def attributes(self) -> tuple[str, ...]:
         return tuple(column for column in self.frame.columns if column not in self.record_keys)
 
-    def add_date_cohort(self, cohort: DateCohort) -> "ProjectionData":
+    def add_date_cohort(self, cohort: DateCohort) -> ProjectionData:
         return replace(self, frame=cohort.apply(self.frame))
 
     def expand(self, horizon: ProjectionHorizon) -> pd.DataFrame:
@@ -231,7 +231,6 @@ class ProjectionData:
         if dates.entry_date is not None:
             entry = pd.to_datetime(result[dates.entry_date], errors="coerce")
             start = pd.to_datetime(result["period_start"])
-            end = pd.to_datetime(result["period_end"])
             months = (start.dt.year - entry.dt.year) * 12 + (start.dt.month - entry.dt.month)
             result["duration_month"] = months.where(entry.notna())
             result["duration_year"] = (months // 12).where(entry.notna())
@@ -308,7 +307,7 @@ class ProjectionDataset:
         *,
         keys: str | Iterable[str],
         allow_duplicates: bool = False,
-    ) -> "ProjectionDataset":
+    ) -> ProjectionDataset:
         if name in self.tables:
             raise ValidationError(f"table {name!r} already exists")
         self.tables[name] = ProjectionTable(

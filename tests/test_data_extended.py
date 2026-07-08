@@ -3,15 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from projectionmodels import (
-    DateCohort,
-    ProjectionData,
-    ProjectionDataset,
-    ProjectionDates,
-    ProjectionHorizon,
-    ProjectionTable,
-    ValidationError,
-)
+from projectionmodels import DateCohort, ProjectionDates, ProjectionHorizon, ValidationError
+from projectionmodels.advanced import ProjectionData, ProjectionDataset, ProjectionTable
 
 
 def test_date_cohort_frequency_and_missing_dates():

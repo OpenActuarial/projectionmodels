@@ -3,15 +3,15 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from projectionmodels import (
+from projectionmodels import ValidationError
+from projectionmodels.advanced import (
     Calculation,
     CalculationContext,
-    DependencyError,
     Metric,
     RollForward,
-    ValidationError,
 )
 from projectionmodels.calculations import order_variables
+from projectionmodels.exceptions import DependencyError
 
 
 def test_calculation_context_access_prior_and_weight():

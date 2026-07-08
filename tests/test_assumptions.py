@@ -1,14 +1,15 @@
+import actuarialpy as ap
 import numpy as np
 import pandas as pd
 import pytest
 
 from projectionmodels import (
     Assumption,
-    AssumptionResolutionError,
     CredibilityAssumption,
     SeasonalityAssumption,
     TrendAssumption,
 )
+from projectionmodels.exceptions import AssumptionResolutionError
 
 
 def test_keyed_assumption_resolution():
@@ -32,9 +33,9 @@ def test_missing_assumption_is_strict():
 def test_trend_from_experience_uses_actuarialpy():
     history = pd.DataFrame(
         {
-            "product": ["PPO"] * 4,
-            "month": pd.date_range("2026-01-01", periods=4, freq="MS"),
-            "claims": [1, 2, 3, 4],
+            "product": ["PPO"] * 24,
+            "month": pd.date_range("2025-01-01", periods=24, freq="MS"),
+            "claims": 100.0 * (1.007 ** np.arange(24)),
         }
     )
     trend = TrendAssumption.from_experience(
@@ -44,8 +45,9 @@ def test_trend_from_experience_uses_actuarialpy():
         date_col="month",
         value_col="claims",
     )
+    direct = ap.fit_trend(history, date_col="month", value_col="claims")
     assert trend.source == "actuarialpy_estimate"
-    assert trend.values["claim_trend"].item() == pytest.approx(0.12)
+    assert trend.values["claim_trend"].item() == pytest.approx(direct.annual_trend)
 
 
 def test_seasonality_from_experience():
@@ -62,6 +64,7 @@ def test_seasonality_from_experience():
         by="product",
         date_col="month",
         value_col="claims",
+        min_years=1,
     )
     assert len(seasonality.values) == 12
     assert seasonality.values["claim_seasonality"].mean() == pytest.approx(1.0)

@@ -6,7 +6,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-
 EXAMPLE_DIR = Path(__file__).parents[1] / "examples"
 
 
@@ -18,7 +17,7 @@ def run_example(name: str) -> dict[str, object]:
 
 
 def test_general_projection_example_outputs_and_audits():
-    output = run_example("general_projection.py")
+    output = run_example("advanced/general_projection.py")
     annual = output["annual"]
     comparison = output["comparison"]
     assert len(annual) == 8
@@ -79,7 +78,7 @@ def test_calculated_assumptions_example_uses_actuarialpy_sources():
 
 
 def test_member_level_example_responds_to_lapse_by_product():
-    output = run_example("member_level_projection.py")
+    output = run_example("advanced/member_level_projection.py")
     comparison = output["comparison"]
     term = comparison.loc[comparison["product_id"] == "term"]
     whole_life = comparison.loc[comparison["product_id"] == "whole_life"]
@@ -89,7 +88,7 @@ def test_member_level_example_responds_to_lapse_by_product():
 
 
 def test_sensitivity_example_orders_claim_results():
-    output = run_example("sensitivity_analysis.py")
+    output = run_example("advanced/sensitivity_analysis.py")
     annual = output["annual"]
     low = annual.loc[annual["scenario"] == "trend_4%"].set_index("calendar_year")
     high = annual.loc[annual["scenario"] == "trend_8%"].set_index("calendar_year")
@@ -97,6 +96,17 @@ def test_sensitivity_example_orders_claim_results():
     assert (output["comparison"]["projected_claims_change"] > 0).all()
     assert set(annual["scenario"]) == {"baseline", "trend_4%", "trend_6%", "trend_8%"}
 
+
+
+def test_renewal_rate_action_example_applies_by_group_date():
+    output = run_example("renewal_rate_actions.py")
+    detail = output["detail"].pivot(
+        index="projection_period", columns="group_id", values="premium_pmpm"
+    )
+    assert detail.loc["2027-02", "A"] == pytest.approx(100.0)
+    assert detail.loc["2027-03", "A"] == pytest.approx(110.0)
+    assert detail.loc["2027-06", "B"] == pytest.approx(100.0)
+    assert detail.loc["2027-07", "B"] == pytest.approx(120.0)
 
 def test_underwriting_example_produces_exhibit_ready_results():
     output = run_example("underwriting_results.py")

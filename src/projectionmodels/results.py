@@ -230,7 +230,7 @@ class ProjectionResults:
         return self.adjustment_audit_data.copy()
 
     @classmethod
-    def combine(cls, *results: "ProjectionResults") -> "ProjectionResults":
+    def combine(cls, *results: ProjectionResults) -> ProjectionResults:
         """Combine compatible result sets column-wise on their common identifiers."""
 
         if not results:

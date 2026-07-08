@@ -4,12 +4,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-
 EXAMPLE_DIR = Path(__file__).parents[1] / "examples"
-EXAMPLE_FILES = sorted(EXAMPLE_DIR.glob("*.py"))
+EXAMPLE_FILES = sorted(EXAMPLE_DIR.rglob("*.py"))
 
 
-@pytest.mark.parametrize("path", EXAMPLE_FILES, ids=lambda path: path.name)
+@pytest.mark.parametrize("path", EXAMPLE_FILES, ids=lambda path: str(path.relative_to(EXAMPLE_DIR)))
 def test_examples_expose_and_execute_run_example(path):
     namespace = runpy.run_path(str(path), run_name="projectionmodels_example")
     assert "run_example" in namespace
@@ -22,7 +21,7 @@ def test_examples_expose_and_execute_run_example(path):
     )
 
 
-@pytest.mark.parametrize("path", EXAMPLE_FILES, ids=lambda path: path.name)
+@pytest.mark.parametrize("path", EXAMPLE_FILES, ids=lambda path: str(path.relative_to(EXAMPLE_DIR)))
 def test_examples_execute_as_scripts(path, capsys):
     runpy.run_path(str(path), run_name="__main__")
     assert capsys.readouterr().out.strip()

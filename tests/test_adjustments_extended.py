@@ -3,13 +3,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from projectionmodels import (
-    Adjustment,
-    AdjustmentError,
-    Assumption,
-    Scenario,
-    Sensitivity,
-)
+from projectionmodels import Adjustment, Assumption, Scenario
+from projectionmodels.advanced import Sensitivity
+from projectionmodels.exceptions import AdjustmentError
 
 
 @pytest.mark.parametrize(

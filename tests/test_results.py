@@ -1,7 +1,8 @@
 import pandas as pd
 import pytest
 
-from projectionmodels import Calculation, Metric, ProjectionResults
+from projectionmodels import ProjectionResults
+from projectionmodels.advanced import Calculation, Metric
 
 
 def test_grain_aware_aggregation_and_ratio_recalculation():
