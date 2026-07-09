@@ -41,7 +41,7 @@ __all__ = [
     "ValidationError",
 ]
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 # Backward-compatible access for the 0.3 advanced API.  These names are no
 # longer advertised at the package root and will move permanently to
