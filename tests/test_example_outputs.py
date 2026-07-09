@@ -127,3 +127,25 @@ def test_underwriting_example_produces_exhibit_ready_results():
     assert (comparison["claims_change"] >= 0).all()
     assert (comparison["underwriting_margin_change"] <= 0).all()
     assert pd.api.types.is_numeric_dtype(exhibit["loss_ratio"])
+
+
+def test_pooled_claims_example_outputs():
+    output = run_example("pooled_claims.py")
+    assert output["ceded_total"] > 0
+    assert output["retained_pmpm"] < output["unpooled_pmpm"]
+    summary = output["summary"]
+    assert (summary["claim_pmpm"] > 0).all()
+    # The charge is added flat and outside the blend, so the with-charge and
+    # without-charge projections differ by exactly the stated PMPM.
+    assert output["net_pmpm"] == pytest.approx(
+        output["net_pmpm_excluding_charge"] + output["pooling_charge"], rel=1e-9
+    )
+    # Pooling reconciliation: what left the experience equals ceded per
+    # experience member month.
+    assert output["unpooled_pmpm"] - output["retained_pmpm"] == pytest.approx(
+        output["ceded_total"] / output["experience_member_months"], rel=1e-9
+    )
+    # Level anchor (data is seeded, so this is deterministic): invariants
+    # alone cannot catch basis or scale errors — a projection off by 80x
+    # satisfies every ratio check above.
+    assert 300.0 < output["net_pmpm"] < 380.0

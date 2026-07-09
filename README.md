@@ -122,6 +122,25 @@ results = projection.project()
 Trend, seasonality, completion, and credibility may be supplied directly as
 assumption tables.
 
+### Cost levels and pipeline order
+
+The claim workflow evaluates, in order: complete → deseasonalize → trend the
+experience rate to the blend basis → credibility blend → trend from the basis
+to each projection period → reseasonalize → add `rate_loads` → multiply by
+membership.
+
+The complement is used **as stated**. By default the blend basis is the
+prospective midpoint of the horizon (`complement_basis="prospective"`), the
+level at which manual and book rates are conventionally quoted — so a
+zero-credibility projection reproduces the complement rather than a trended
+copy of it. Set `complement_basis="experience"` if your complement is quoted
+at experience-period cost level, or pass an explicit as-of date. Because the
+month arithmetic is exactly additive, results at full credibility are
+identical under every basis.
+
+`rate_loads` (for example a pooling charge) are added to the projected rate
+as stated: flat across periods, after seasonality, outside the blend.
+
 ## Estimating assumptions with actuarialpy
 
 Estimation is explicit and separate from projection execution:
@@ -241,6 +260,7 @@ Primary examples:
 
 ```text
 examples/health_claims.py
+examples/pooled_claims.py
 examples/calculated_assumptions.py
 examples/renewal_rate_actions.py
 examples/date_cohorts.py

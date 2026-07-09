@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.5.0] - 2026-07-08
+
+### Fixed
+
+- **Credibility complements are no longer trended from the experience
+  midpoint.** `ClaimProjection` previously blended the experience rate with
+  the complement and then trended the blended rate, silently restating the
+  complement at experience-period cost level (a zero-credibility projection
+  returned the manual times the full trend factor). Blending now happens at
+  the prospective midpoint by default: experience is trended to the blend
+  basis, blended with the complement **as stated**, and the blended rate is
+  trended only from the basis to each projection period. Results change for
+  any projection with credibility below 1 and a nonzero trend; full
+  credibility results are unchanged.
+- The real-dependency guard test no longer asserts an install-path substring
+  ("site-packages"), which failed on Debian/Ubuntu layouts. It now verifies
+  the imported module matches importlib's resolved spec.
+- Unsegmented seasonality (a plain season/factor table with no segment
+  lookups) now works in projections. `apply_seasonality` accepts a tidy
+  per-segment table joined on `by` plus season, or a flat Series indexed by
+  season; the projection previously always passed a DataFrame reconstructed
+  from the expanded frame, which the unsegmented path rejects. It now passes
+  the assumption's own table — as a flat Series when there are no segment
+  columns — mirroring the deseasonalize step on the experience side.
+
+### Added
+
+- `ClaimProjection.complement_basis` — declares the cost level of the
+  complement: `"prospective"` (default), `"experience"` (pre-0.5.0
+  behaviour), or an explicit as-of date.
+- `ClaimProjection.rate_loads` — flat PMPM loads (for example a pooling
+  charge) added to the projected rate as stated, after seasonality and
+  outside the credibility blend. Loads register as assumptions, so scenarios
+  can adjust them.
+- `ProjectionHorizon.midpoint` — the mean period midpoint, used as the
+  default blend basis.
+- `trended_experience_rate` audit column between the experience rate and the
+  blend.
+- `examples/pooled_claims.py` — large-claim pooling composed ahead of
+  `ClaimExperience` with `actuarialpy.pool_losses`, the charge carried as a
+  rate load.
+- Hand-pinned regression tests covering zero credibility, blend-basis
+  invariance at full credibility, the legacy ordering as an explicit opt-in,
+  partial-credibility levels, and load application.
+
 All notable changes to this project are documented here.
 
 ## [Unreleased]

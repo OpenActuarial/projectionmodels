@@ -1,4 +1,14 @@
-"""Claim experience preparation and claim-type projection workflow."""
+"""Claim experience preparation and claim-type projection workflow.
+
+The projection pipeline evaluates, in order: complete reported claims to
+ultimate, remove seasonality, trend the experience rate to the credibility
+blend basis, blend with the complement **as stated**, trend the blended rate
+from the basis to each projection period, reapply seasonality, add flat
+``rate_loads``, and multiply by membership. The blend basis defaults to the
+prospective midpoint of the horizon — the level at which manual and book
+rates are conventionally quoted — so a zero-credibility projection reproduces
+the complement rather than a trended copy of it.
+"""
 
 from __future__ import annotations
 
@@ -45,6 +55,29 @@ def _weighted_midpoint(dates: pd.Series, weights: pd.Series) -> pd.Timestamp:
     )
     w = weights.loc[valid].to_numpy(dtype=float)
     return pd.to_datetime(int(np.average(values, weights=w)), unit="ns")
+
+
+def _months_between(base: Any, target: Any, index: pd.Index) -> pd.Series:
+    """Calendar month gap, with day fractions, between two date-likes.
+
+    Accepts scalars or Series and returns a Series aligned to ``index``. The
+    arithmetic is exactly additive — ``gap(a, b) + gap(b, c) == gap(a, c)``
+    for any intermediate ``b`` — which keeps full-credibility projections
+    invariant to the choice of blend basis.
+    """
+
+    def as_series(value: Any) -> pd.Series:
+        if isinstance(value, pd.Series):
+            return pd.to_datetime(value)
+        return pd.Series(pd.Timestamp(value), index=index)
+
+    base_dates = as_series(base)
+    target_dates = as_series(target)
+    return (
+        (target_dates.dt.year - base_dates.dt.year) * 12
+        + (target_dates.dt.month - base_dates.dt.month)
+        + (target_dates.dt.day - base_dates.dt.day) / 30.4375
+    )
 
 
 @dataclass(frozen=True)
@@ -223,7 +256,38 @@ class ClaimExperience:
 
 @dataclass
 class ClaimProjection:
-    """Project claim rates by entity and claim type onto supplied membership."""
+    """Project credibility-blended claim rates onto supplied membership.
+
+    Pipeline, in order:
+
+    1. ``experience_claim_rate`` is trended from each record's
+       ``experience_midpoint`` to the blend basis
+       (``trended_experience_rate``).
+    2. The trended experience is credibility blended with
+       ``complement_claim_rate`` **as stated** (``credible_claim_rate``).
+    3. The blended rate is trended from the blend basis to each period's
+       midpoint (``trended_claim_rate``).
+    4. Seasonality redistributes within the year and ``rate_loads`` are added,
+       flat and outside the blend (``projected_claim_rate``).
+    5. Rates are multiplied by membership (``projected_claims``).
+
+    Cost levels — ``complement_basis`` declares the level at which the
+    complement is quoted:
+
+    * ``"prospective"`` (default): the horizon's mean period midpoint, the
+      conventional level for manual and book rates. Zero credibility
+      therefore reproduces the complement as stated.
+    * ``"experience"``: the record's experience midpoint, so the complement is
+      trended alongside experience (the pre-0.5.0 behaviour).
+    * an explicit date: any other as-of level.
+
+    Because the calendar month arithmetic is exactly additive, projections at
+    full credibility are identical under every basis.
+
+    ``rate_loads`` (for example a pooling charge) are Assumptions or scalars
+    quoted at prospective level; they are added to the projected rate as
+    stated, per period, after seasonality, and are not credibility weighted.
+    """
 
     base_rates: pd.DataFrame
     projection_keys: tuple[str, ...] | list[str]
@@ -233,6 +297,8 @@ class ClaimProjection:
     trend: TrendAssumption
     seasonality: SeasonalityAssumption | None = None
     credibility: CredibilityAssumption | None = None
+    complement_basis: str | pd.Timestamp = "prospective"
+    rate_loads: Any = ()
     membership_col: str = "member_months"
     membership_period_col: str = "projection_period"
     dates: ProjectionDates | None = None
@@ -264,6 +330,34 @@ class ClaimProjection:
                 "credibility requires complement_claim_rate in base_rates"
             )
 
+        if isinstance(self.complement_basis, str):
+            if self.complement_basis not in {"prospective", "experience"}:
+                try:
+                    self.complement_basis = pd.Timestamp(self.complement_basis)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(
+                        "complement_basis must be 'prospective', 'experience', or a date"
+                    ) from exc
+        else:
+            self.complement_basis = pd.Timestamp(self.complement_basis)
+
+        raw_loads = self.rate_loads
+        if raw_loads is None:
+            raw_loads = ()
+        if isinstance(raw_loads, Assumption) or np.isscalar(raw_loads):
+            raw_loads = (raw_loads,)
+        loads: list[Assumption] = []
+        for position, load in enumerate(raw_loads, start=1):
+            if isinstance(load, Assumption):
+                loads.append(load)
+            elif np.isscalar(load):
+                loads.append(Assumption(f"rate_load_{position}", float(load)))
+            else:
+                raise ValidationError(
+                    "rate_loads entries must be Assumption objects or scalars"
+                )
+        self.rate_loads = tuple(loads)
+
     @classmethod
     def from_experience(
         cls,
@@ -276,6 +370,8 @@ class ClaimProjection:
         credibility: CredibilityAssumption | None = None,
         completion: CompletionAssumption | None = None,
         complement: Assumption | Any | None = None,
+        complement_basis: str | pd.Timestamp = "prospective",
+        rate_loads: Any = (),
         extra_record_cols: Iterable[str] = (),
         membership_col: str = "member_months",
         membership_period_col: str = "projection_period",
@@ -296,6 +392,8 @@ class ClaimProjection:
             trend=trend,
             seasonality=seasonality,
             credibility=credibility,
+            complement_basis=complement_basis,
+            rate_loads=rate_loads,
             membership_col=membership_col,
             membership_period_col=membership_period_col,
             dates=dates,
@@ -309,12 +407,32 @@ class ClaimProjection:
             assumptions.add(self.credibility)
         for item in self.additional_assumptions:
             assumptions.add(item)
+        for load in self.rate_loads:
+            assumptions.add(load)
 
         record_grain = self.projection_keys + (self.claim_type_col,)
         entity_grain = self.projection_keys
 
+        if isinstance(self.complement_basis, pd.Timestamp):
+            blend_basis: pd.Timestamp | None = self.complement_basis
+        elif self.complement_basis == "experience":
+            blend_basis = None
+        else:  # "prospective"
+            blend_basis = self.horizon.midpoint
+
+        def trended_experience(context):
+            if blend_basis is None:
+                return context["experience_claim_rate"]
+            trend_factor = actuarialpy_function("trend_factor")
+            months = _months_between(
+                context["experience_midpoint"], blend_basis, context.frame.index
+            )
+            return context["experience_claim_rate"] * trend_factor(
+                context[self.trend.name], months
+            )
+
         def credible_rate(context):
-            observed = context["experience_claim_rate"]
+            observed = context["trended_experience_rate"]
             if self.credibility is None:
                 return observed
             blend = actuarialpy_function("credibility_weighted_estimate")
@@ -324,18 +442,14 @@ class ClaimProjection:
                 context[self.credibility.name],
             )
 
-        def trend_months(context):
-            base = pd.to_datetime(context["experience_midpoint"])
-            target = pd.to_datetime(context["period_midpoint"])
-            return (
-                (target.dt.year - base.dt.year) * 12
-                + (target.dt.month - base.dt.month)
-                + (target.dt.day - base.dt.day) / 30.4375
-            )
-
         def trended_rate(context):
             trend_factor = actuarialpy_function("trend_factor")
-            months = trend_months(context)
+            base = (
+                context["experience_midpoint"] if blend_basis is None else blend_basis
+            )
+            months = _months_between(
+                base, context["period_midpoint"], context.frame.index
+            )
             return context["credible_claim_rate"] * trend_factor(
                 context[self.trend.name], months
             )
@@ -344,36 +458,58 @@ class ClaimProjection:
             if self.seasonality is None:
                 return context["trended_claim_rate"]
             apply_seasonality = actuarialpy_function("apply_seasonality")
-            lookup = list(self.seasonality.lookup)
             by = [
                 column
-                for column in lookup
+                for column in self.seasonality.lookup
                 if column != self.seasonality.season_col
             ]
-            factor_table = context.frame.loc[
-                :, list(dict.fromkeys(lookup + [self.seasonality.name]))
-            ].drop_duplicates(lookup)
+            # actuarialpy's contract: factors are either a tidy per-segment
+            # table joined on by + season, or a flat Series indexed by season
+            # when there are no segment columns. Use the assumption's own
+            # table — the same one deseasonalize consumed on the experience
+            # side — rather than reconstructing factors from the expanded
+            # frame, which only ever contains the horizon's seasons.
+            factor_col = self.seasonality.value_col or self.seasonality.name
+            if by:
+                factors = self.seasonality.values
+            else:
+                factors = self.seasonality.values.set_index(
+                    self.seasonality.season_col
+                )[factor_col]
             applied = apply_seasonality(
                 context.frame.assign(
                     __projectionmodels_trended_rate__=context["trended_claim_rate"]
                 ),
-                factor_table,
+                factors,
                 date_col="period_start",
                 value_col="__projectionmodels_trended_rate__",
                 freq=self.seasonality.frequency,
                 by=by or None,
-                factor_col=self.seasonality.name,
+                factor_col=factor_col,
                 season_name=self.seasonality.season_col,
                 out_col="__projectionmodels_projected_rate__",
             )
             return applied["__projectionmodels_projected_rate__"]
 
+        def projected_rate(context):
+            value = seasonal_rate(context)
+            for load in self.rate_loads:
+                value = value + context[load.name]
+            return value
+
         calculations = [
+            Calculation(
+                "trended_experience_rate",
+                formula=trended_experience,
+                aggregation="mean",
+                grain=record_grain,
+            ),
             Calculation(
                 "credible_claim_rate",
                 formula=credible_rate,
                 aggregation="mean",
                 grain=record_grain,
+                depends_on=("trended_experience_rate",),
             ),
             Calculation(
                 "trended_claim_rate",
@@ -384,7 +520,7 @@ class ClaimProjection:
             ),
             Calculation(
                 "projected_claim_rate",
-                formula=seasonal_rate,
+                formula=projected_rate,
                 aggregation="mean",
                 grain=record_grain,
                 depends_on=("trended_claim_rate",),

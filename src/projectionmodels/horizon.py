@@ -113,5 +113,18 @@ class ProjectionHorizon:
             frame["season"] = 1
         return frame
 
+    @property
+    def midpoint(self) -> pd.Timestamp:
+        """Mean period midpoint of the horizon.
+
+        This is the prospective rating midpoint used as the default
+        credibility blend basis: manual and book rates are conventionally
+        stated at this level.
+        """
+
+        midpoints = self.to_frame()["period_midpoint"]
+        origin = midpoints.iloc[0]
+        return pd.Timestamp(origin + (midpoints - origin).mean())
+
     def __len__(self) -> int:
         return len(self.to_frame())

@@ -129,6 +129,15 @@ def test_actuarialpy_estimated_completion_can_be_applied(completion_transactions
 
 
 def test_tests_use_the_installed_actuarialpy_package():
+    import importlib.util
+    from pathlib import Path
+
     assert ap.__version__.startswith(("0.41.", "0.42."))
     assert ap.__file__ is not None
-    assert "site-packages" in ap.__file__
+    # The imported module must be the one the import system resolves — an
+    # injected fake (a bare ModuleType in sys.modules) fails this — and it
+    # must not live inside this repository.
+    spec = importlib.util.find_spec("actuarialpy")
+    assert spec is not None and spec.origin is not None
+    assert Path(ap.__file__).resolve() == Path(spec.origin).resolve()
+    assert "projectionmodels" not in Path(ap.__file__).resolve().parts
