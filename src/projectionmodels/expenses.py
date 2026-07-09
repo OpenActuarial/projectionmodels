@@ -27,7 +27,7 @@ def _as_tuple(value: str | Iterable[str]) -> tuple[str, ...]:
 
 @dataclass
 class ExpenseProjection:
-    """Project expenses with PMPM, fixed, premium, or claims bases."""
+    """Project expenses with per-exposure, fixed, premium, or claims bases."""
 
     expenses: pd.DataFrame
     projection_keys: tuple[str, ...] | list[str]
@@ -37,10 +37,10 @@ class ExpenseProjection:
     base_date_col: str
     horizon: ProjectionHorizon
     trend: TrendAssumption
-    membership: pd.DataFrame | None = None
+    exposure: pd.DataFrame | None = None
     premium: pd.DataFrame | None = None
     claims: pd.DataFrame | None = None
-    membership_col: str = "member_months"
+    exposure_col: str = "exposure"
     premium_col: str = "premium"
     claims_col: str = "projected_claims"
     dates: ProjectionDates | None = None
@@ -57,7 +57,7 @@ class ExpenseProjection:
         missing = [column for column in required if column not in self.expenses.columns]
         if missing:
             raise ValidationError(f"expenses is missing columns: {missing}")
-        allowed = {"pmpm", "fixed_monthly", "percent_premium", "percent_claims"}
+        allowed = {"per_exposure", "fixed_monthly", "percent_premium", "percent_claims"}
         unknown = sorted(set(self.expenses[self.basis_col].dropna()) - allowed)
         if unknown:
             raise ValidationError(f"unknown expense bases: {unknown}")
@@ -84,11 +84,11 @@ class ExpenseProjection:
             basis = context[self.basis_col]
             projected_rate = context["projected_expense_rate"]
             result = pd.Series(np.nan, index=context.frame.index, dtype=float)
-            mask = basis.eq("pmpm")
+            mask = basis.eq("per_exposure")
             if mask.any():
                 result.loc[mask] = (
                     projected_rate.loc[mask]
-                    * context[self.membership_col].loc[mask]
+                    * context[self.exposure_col].loc[mask]
                     * context["active_fraction"].loc[mask]
                 )
             mask = basis.eq("fixed_monthly")
@@ -142,7 +142,7 @@ class ExpenseProjection:
         )
         dataset = ProjectionDataset(records)
         for name, table, value_col in (
-            ("membership", self.membership, self.membership_col),
+            ("exposure", self.exposure, self.exposure_col),
             ("premium", self.premium, self.premium_col),
             ("claims", self.claims, self.claims_col),
         ):
@@ -157,8 +157,8 @@ class ExpenseProjection:
                     keys=[*self.projection_keys, "projection_period"],
                 )
         bases = set(self.expenses[self.basis_col])
-        if "pmpm" in bases and self.membership is None:
-            raise ValidationError("PMPM expenses require a membership table")
+        if "per_exposure" in bases and self.exposure is None:
+            raise ValidationError("Per-exposure expenses require an exposure table")
         if "percent_premium" in bases and self.premium is None:
             raise ValidationError("percent_premium expenses require a premium table")
         if "percent_claims" in bases and self.claims is None:

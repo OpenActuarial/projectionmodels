@@ -1,6 +1,6 @@
 # projectionmodels
 
-Focused actuarial projections of claims, premium, membership, and expenses.
+Focused actuarial projections of claims, premium, and expenses on supplied exposure.
 
 The package is intentionally organized around concrete workflows. Most users
 should not need to construct a calculation graph or define a custom state
@@ -24,7 +24,7 @@ ClaimExperience        Prepare a base claim rate from experience
 ClaimProjection        Project claim rates and claims by claim type
 PremiumProjection      Roll premium forward, including renewal rate actions
 RenewalRateActions     Supply effective-dated rate actions
-ExpenseProjection      Project PMPM, fixed, premium-based, and claim-based expenses
+ExpenseProjection      Project per-exposure, fixed, premium-based, and claim-based expenses
 ProjectionHorizon      Define monthly, quarterly, or annual projection periods
 ProjectionDates        Define entry, exit, renewal, and experience date columns
 DateCohort              Split records into existing/new or other date cohorts
@@ -45,13 +45,13 @@ premium_data = pd.DataFrame(
     {
         "group_id": ["A", "B"],
         "renewal_date": pd.to_datetime(["2027-03-01", "2027-07-01"]),
-        "current_premium_pmpm": [100.0, 100.0],
+        "current_premium_rate": [100.0, 100.0],
         "rate_action": [0.10, 0.20],
     }
 )
 
 periods = pd.period_range("2027-01", periods=12, freq="M").astype(str)
-membership = pd.DataFrame(
+exposure = pd.DataFrame(
     [
         {
             "group_id": group_id,
@@ -66,7 +66,8 @@ membership = pd.DataFrame(
 results = pm.PremiumProjection(
     premium_data=premium_data,
     projection_keys=["group_id"],
-    membership=membership,
+    exposure=exposure,
+    exposure_col="member_months",
     horizon=pm.ProjectionHorizon("2027-01-01", periods=12),
     recurring_rate_action_col="rate_action",
 ).project()
@@ -107,7 +108,8 @@ experience = pm.ClaimExperience(
 
 projection = pm.ClaimProjection.from_experience(
     experience,
-    membership=membership,
+    exposure=exposure,
+    exposure_col="member_months",
     horizon=pm.ProjectionHorizon("2027-01-01", periods=36),
     completion=completion,
     trend=trend,
@@ -127,7 +129,8 @@ assumption tables.
 The claim workflow evaluates, in order: complete → deseasonalize → trend the
 experience rate to the blend basis → credibility blend → trend from the basis
 to each projection period → reseasonalize → add `rate_loads` → multiply by
-membership.
+exposure. Exposure is whatever unit the book uses — member-months,
+policy months, car-years — named with `exposure_col`.
 
 The complement is used **as stated**. By default the blend basis is the
 prospective midpoint of the horizon (`complement_basis="prospective"`), the
@@ -201,7 +204,7 @@ selected_trend = trend.select(selected_table, note="2027 pricing selection")
 
 `ExpenseProjection` supports:
 
-- `pmpm`
+- `per_exposure`
 - `fixed_monthly`
 - `percent_premium`
 - `percent_claims`
@@ -232,12 +235,12 @@ records = pm.DateCohort(
 ```python
 summary = results.summarize(
     by=["scenario", "product_id", "calendar_year"],
-    measures=["member_months", "premium", "projected_claims", "claim_pmpm"],
+    measures=["member_months", "premium", "projected_claims", "claims_per_exposure"],
 )
 ```
 
 `ProjectionResults` retains measure grain. It counts exposure once when claim
-type is removed from a summary and recalculates PMPMs and loss ratios from their
+type is removed from a summary and recalculates per-exposure rates and loss ratios from their
 summed numerators and denominators.
 
 ## Advanced models

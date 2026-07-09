@@ -36,7 +36,7 @@ def test_health_claims_example_preserves_entity_exposure():
     assert len(by_type) == 24
     assert total["member_months"].eq(1_000.0).all()
     assert total["projected_claims"].gt(0).all()
-    assert total["claim_pmpm"].gt(0).all()
+    assert total["claims_per_exposure"].gt(0).all()
 
 
 def test_expense_example_includes_all_bases():
@@ -101,7 +101,7 @@ def test_sensitivity_example_orders_claim_results():
 def test_renewal_rate_action_example_applies_by_group_date():
     output = run_example("renewal_rate_actions.py")
     detail = output["detail"].pivot(
-        index="projection_period", columns="group_id", values="premium_pmpm"
+        index="projection_period", columns="group_id", values="projected_premium_rate"
     )
     assert detail.loc["2027-02", "A"] == pytest.approx(100.0)
     assert detail.loc["2027-03", "A"] == pytest.approx(110.0)
@@ -134,7 +134,7 @@ def test_pooled_claims_example_outputs():
     assert output["ceded_total"] > 0
     assert output["retained_pmpm"] < output["unpooled_pmpm"]
     summary = output["summary"]
-    assert (summary["claim_pmpm"] > 0).all()
+    assert (summary["claims_per_exposure"] > 0).all()
     # The charge is added flat and outside the blend, so the with-charge and
     # without-charge projections differ by exactly the stated PMPM.
     assert output["net_pmpm"] == pytest.approx(

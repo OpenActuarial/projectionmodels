@@ -5,42 +5,41 @@ from __future__ import annotations
 import pandas as pd
 
 import projectionmodels as pm
-import projectionmodels.advanced as pma
 
 
 def run_example() -> dict[str, object]:
-    records = pma.ProjectionData(
+    records = pm.ProjectionData(
         pd.DataFrame(
             {
                 "product_id": ["PPO", "HMO"],
-                "base_claims_per_exposure": [500.0, 430.0],
+                "base_claim_pmpm": [500.0, 430.0],
                 "member_months": [10_000.0, 8_000.0],
             }
         ),
         projection_keys=["product_id"],
     )
-    model = pma.ProjectionModel(
-        assumptions=pma.AssumptionSet(pm.Assumption("claim_trend", 0.06)),
+    model = pm.ProjectionModel(
+        assumptions=pm.AssumptionSet(pm.Assumption("claim_trend", 0.06)),
         roll_forwards=[
-            pma.RollForward(
-                "claims_per_exposure",
-                initial="base_claims_per_exposure",
-                formula=lambda x: x.prior("claims_per_exposure")
+            pm.RollForward(
+                "claim_pmpm",
+                initial="base_claim_pmpm",
+                formula=lambda x: x.prior("claim_pmpm")
                 * (1 + x["claim_trend"]) ** x.year_fraction,
                 aggregation="mean",
                 grain=["product_id"],
             )
         ],
         calculations=[
-            pma.CashFlow(
+            pm.CashFlow(
                 "projected_claims",
-                formula=lambda x: x["claims_per_exposure"] * x["member_months"],
+                formula=lambda x: x["claim_pmpm"] * x["member_months"],
                 grain=["product_id"],
                 reporting_role="loss",
             )
         ],
     )
-    sensitivity = pma.Sensitivity(
+    sensitivity = pm.Sensitivity(
         target="claim_trend",
         values=[0.04, 0.06, 0.08],
         method="set",

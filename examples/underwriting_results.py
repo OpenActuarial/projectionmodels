@@ -7,7 +7,7 @@ import pandas as pd
 import projectionmodels as pm
 
 
-def _membership() -> pd.DataFrame:
+def _exposure() -> pd.DataFrame:
     periods = pd.period_range("2027-01", periods=24, freq="M").astype(str)
     return pd.DataFrame(
         [
@@ -50,7 +50,7 @@ def _claim_history() -> pd.DataFrame:
 
 def run_example() -> dict[str, object]:
     horizon = pm.ProjectionHorizon("2027-01-01", periods=24)
-    membership = _membership()
+    exposure = _exposure()
     dates = pm.ProjectionDates(
         entry_date="effective_date",
         exposure_timing="daily_prorated",
@@ -62,13 +62,14 @@ def run_example() -> dict[str, object]:
             "product_id": ["PPO", "PPO"],
             "effective_date": pd.to_datetime(["2025-01-01", "2027-04-15"]),
             "business_origin": ["existing", "new_business"],
-            "current_premium_pmpm": [540.0, 560.0],
+            "current_premium_rate": [540.0, 560.0],
         }
     )
     premium_results = pm.PremiumProjection(
         premium_data=premium_data,
         projection_keys=["group_id", "product_id"],
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=horizon,
         dates=dates,
     ).project()
@@ -94,7 +95,8 @@ def run_example() -> dict[str, object]:
     )
     claim_projection = pm.ClaimProjection.from_experience(
         experience,
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=horizon,
         trend=pm.TrendAssumption.from_values(
             "claim_trend",
@@ -140,7 +142,7 @@ def run_example() -> dict[str, object]:
             }
             for group_id in ("A", "B")
             for expense_type, value, basis in (
-                ("administration", 35.0, "pmpm"),
+                ("administration", 35.0, "per_exposure"),
                 ("commission", 0.025, "percent_premium"),
                 ("claim_admin", 0.01, "percent_claims"),
             )
@@ -162,7 +164,8 @@ def run_example() -> dict[str, object]:
             base_date_col="base_date",
             horizon=horizon,
             trend=pm.TrendAssumption.from_values("expense_trend", 0.03),
-            membership=membership,
+            exposure=exposure,
+            exposure_col="member_months",
             premium=premium[
                 ["group_id", "product_id", "projection_period", "premium"]
             ],

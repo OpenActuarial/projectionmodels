@@ -134,7 +134,7 @@ def run_example() -> dict[str, object]:
         lookup=["claim_type"],
         value_col="manual_claim_rate",
     )
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         {
             "group_id": ["A"] * 6,
             "product_id": ["PPO"] * 6,
@@ -145,7 +145,8 @@ def run_example() -> dict[str, object]:
 
     projection = pm.ClaimProjection.from_experience(
         experience,
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=pm.ProjectionHorizon("2027-01-01", periods=6),
         completion=completion,
         seasonality=seasonality,
@@ -156,7 +157,7 @@ def run_example() -> dict[str, object]:
     results = projection.project()
     summary = results.summarize(
         by=["claim_type"],
-        measures=["member_months", "projected_claims", "claim_pmpm"],
+        measures=["member_months", "projected_claims", "claims_per_exposure"],
     )
     assumption_audit = pd.concat(
         [

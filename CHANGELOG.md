@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0] - 2026-07-08
+
+### Changed
+
+- **Domain-agnostic vocabulary across the workflow API**, matching
+  `ClaimExperience` and the rest of the OpenActuarial ecosystem. Renames
+  (old → new): `membership` → `exposure`, `membership_col` (default
+  `"member_months"`) → `exposure_col` (default `"exposure"`), and
+  `membership_period_col` → `exposure_period_col` on `ClaimProjection`,
+  `PremiumProjection`, and `ExpenseProjection`; output measure `claim_pmpm`
+  → `claims_per_exposure`; calculation `premium_pmpm` →
+  `projected_premium_rate`; `current_rate_col` default
+  `"current_premium_pmpm"` → `"current_premium_rate"`; expense basis
+  `"pmpm"` → `"per_exposure"`. Domain units are named through
+  `exposure_col` — the health examples pass
+  `exposure_col="member_months"` and keep PMPM in presentation labels only.
+  Purely a rename: results are numerically identical.
+
 ## [0.5.0] - 2026-07-08
 
 ### Fixed
@@ -30,7 +48,7 @@
 - `ClaimProjection.complement_basis` — declares the cost level of the
   complement: `"prospective"` (default), `"experience"` (pre-0.5.0
   behaviour), or an explicit as-of date.
-- `ClaimProjection.rate_loads` — flat PMPM loads (for example a pooling
+- `ClaimProjection.rate_loads` — flat per-exposure loads (for example a pooling
   charge) added to the projected rate as stated, after seasonality and
   outside the credibility blend. Loads register as assumptions, so scenarios
   can adjust them.

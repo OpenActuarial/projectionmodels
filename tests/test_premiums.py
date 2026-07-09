@@ -12,13 +12,13 @@ from projectionmodels import (
 )
 
 
-def _membership(groups, periods):
+def _exposure(groups, periods):
     return pd.DataFrame(
         [
             {
                 "group_id": group,
                 "projection_period": period,
-                "member_months": 1.0,
+                "exposure": 1.0,
             }
             for group in groups
             for period in pd.period_range("2027-01", periods=periods, freq="M").astype(str)
@@ -31,19 +31,19 @@ def test_recurring_rate_action_applies_at_each_groups_renewal_and_persists():
         {
             "group_id": ["A", "B"],
             "renewal_date": pd.to_datetime(["2027-03-01", "2027-07-01"]),
-            "current_premium_pmpm": [100.0, 100.0],
+            "current_premium_rate": [100.0, 100.0],
             "rate_action": [0.10, 0.20],
         }
     )
     results = PremiumProjection(
         premium_data=data,
         projection_keys=["group_id"],
-        membership=_membership(["A", "B"], 15),
+        exposure=_exposure(["A", "B"], 15),
         horizon=ProjectionHorizon("2027-01-01", periods=15),
         recurring_rate_action_col="rate_action",
     ).project().detail()
 
-    rates = results.pivot(index="projection_period", columns="group_id", values="premium_pmpm")
+    rates = results.pivot(index="projection_period", columns="group_id", values="projected_premium_rate")
     assert rates.loc["2027-02", "A"] == pytest.approx(100.0)
     assert rates.loc["2027-03", "A"] == pytest.approx(110.0)
     assert rates.loc["2027-06", "B"] == pytest.approx(100.0)
@@ -57,7 +57,7 @@ def test_dated_rate_action_applies_once_and_does_not_repeat():
         {
             "group_id": ["A"],
             "renewal_date": pd.to_datetime(["2027-03-15"]),
-            "current_premium_pmpm": [100.0],
+            "current_premium_rate": [100.0],
         }
     )
     actions = RenewalRateActions(
@@ -73,19 +73,19 @@ def test_dated_rate_action_applies_once_and_does_not_repeat():
     results = PremiumProjection(
         premium_data=data,
         projection_keys=["group_id"],
-        membership=_membership(["A"], 15),
+        exposure=_exposure(["A"], 15),
         horizon=ProjectionHorizon("2027-01-01", periods=15),
         rate_actions=actions,
     ).project().detail().set_index("projection_period")
 
-    assert results.loc["2027-02", "premium_pmpm"] == pytest.approx(100.0)
-    assert results.loc["2027-03", "premium_pmpm"] == pytest.approx(110.0)
-    assert results.loc["2028-03", "premium_pmpm"] == pytest.approx(110.0)
+    assert results.loc["2027-02", "projected_premium_rate"] == pytest.approx(100.0)
+    assert results.loc["2027-03", "projected_premium_rate"] == pytest.approx(110.0)
+    assert results.loc["2028-03", "projected_premium_rate"] == pytest.approx(110.0)
 
 
 def test_multiple_dated_actions_compound_in_their_effective_periods():
     data = pd.DataFrame(
-        {"group_id": ["A"], "current_premium_pmpm": [100.0]}
+        {"group_id": ["A"], "current_premium_rate": [100.0]}
     )
     actions = RenewalRateActions(
         pd.DataFrame(
@@ -100,30 +100,30 @@ def test_multiple_dated_actions_compound_in_their_effective_periods():
     detail = PremiumProjection(
         premium_data=data,
         projection_keys=["group_id"],
-        membership=_membership(["A"], 15),
+        exposure=_exposure(["A"], 15),
         horizon=ProjectionHorizon("2027-01-01", periods=15),
         rate_actions=actions,
     ).project().detail().set_index("projection_period")
-    assert detail.loc["2027-03", "premium_pmpm"] == pytest.approx(110.0)
-    assert detail.loc["2028-03", "premium_pmpm"] == pytest.approx(115.5)
+    assert detail.loc["2027-03", "projected_premium_rate"] == pytest.approx(110.0)
+    assert detail.loc["2028-03", "projected_premium_rate"] == pytest.approx(115.5)
 
 
-def test_premium_equals_rate_times_active_membership():
+def test_premium_equals_rate_times_active_exposure():
     data = pd.DataFrame(
         {
             "group_id": ["A"],
-            "current_premium_pmpm": [125.0],
+            "current_premium_rate": [125.0],
             "effective_date": pd.to_datetime(["2027-01-16"]),
         }
     )
     detail = PremiumProjection(
         premium_data=data,
         projection_keys=["group_id"],
-        membership=pd.DataFrame(
+        exposure=pd.DataFrame(
             {
                 "group_id": ["A"],
                 "projection_period": ["2027-01"],
-                "member_months": [100.0],
+                "exposure": [100.0],
             }
         ),
         horizon=ProjectionHorizon("2027-01-01", periods=1),
@@ -151,14 +151,14 @@ def test_rate_action_validation():
         ).to_projection_table(ProjectionHorizon("2027-01-01", periods=12))
 
 
-def test_premium_projection_requires_rate_action_and_membership_columns():
+def test_premium_projection_requires_rate_action_and_exposure_columns():
     with pytest.raises(ValidationError, match="premium_data is missing"):
         PremiumProjection(
             premium_data=pd.DataFrame(
-                {"group_id": ["A"], "current_premium_pmpm": [100.0]}
+                {"group_id": ["A"], "current_premium_rate": [100.0]}
             ),
             projection_keys=["group_id"],
-            membership=_membership(["A"], 1),
+            exposure=_exposure(["A"], 1),
             horizon=ProjectionHorizon("2027-01-01", periods=1),
             recurring_rate_action_col="rate_action",
         )

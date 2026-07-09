@@ -13,20 +13,20 @@ def test_grain_aware_aggregation_and_ratio_recalculation():
             "group": ["A", "A"],
             "claim_type": ["ip", "op"],
             "claims": [100.0, 50.0],
-            "member_months": [10.0, 10.0],
-            "claim_pmpm": [10.0, 5.0],
+            "exposure": [10.0, 10.0],
+            "claims_per_exposure": [10.0, 5.0],
         }
     )
     results = ProjectionResults(
         frame,
         measures={
             "claims": Calculation("claims", grain=["group", "claim_type"]),
-            "member_months": Calculation("member_months", grain=["group"]),
-            "claim_pmpm": Metric(
-                "claim_pmpm",
+            "exposure": Calculation("exposure", grain=["group"]),
+            "claims_per_exposure": Metric(
+                "claims_per_exposure",
                 aggregation="recalculate",
                 numerator="claims",
-                denominator="member_months",
+                denominator="exposure",
                 grain=["group", "claim_type"],
             ),
         },
@@ -35,10 +35,10 @@ def test_grain_aware_aggregation_and_ratio_recalculation():
     )
     total = results.summarize(by=["scenario", "projection_period", "group"])
     assert total["claims"].item() == 150.0
-    assert total["member_months"].item() == 10.0
-    assert total["claim_pmpm"].item() == pytest.approx(15.0)
+    assert total["exposure"].item() == 10.0
+    assert total["claims_per_exposure"].item() == pytest.approx(15.0)
 
     by_type = results.summarize(
         by=["scenario", "projection_period", "group", "claim_type"]
     )
-    assert by_type["member_months"].tolist() == [10.0, 10.0]
+    assert by_type["exposure"].tolist() == [10.0, 10.0]

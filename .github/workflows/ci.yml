@@ -15,6 +15,8 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # Edges of the actuarialpy range declared in pyproject.toml —
+        # update these together with the pin.
         actuarialpy-version: ["0.41.0", "0.42.0"]
     steps:
       - uses: actions/checkout@v4
@@ -53,11 +55,16 @@ jobs:
       - name: Smoke test the installed wheel
         run: |
           /tmp/projectionmodels-clean/bin/python - <<'PY'
+          import importlib.metadata
+          import pathlib
+          import tomllib
+
           import actuarialpy
           import projectionmodels as pm
 
-          assert actuarialpy.__version__.startswith(("0.41.", "0.42."))
-          assert pm.__version__ == "0.4.0"
+          expected = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          assert pm.__version__ == expected, (pm.__version__, expected)
+          assert importlib.metadata.version("projectionmodels") == expected
           assert len(pm.ProjectionHorizon("2027-01-01", periods=2)) == 2
-          print("clean wheel install passed")
+          print(f"clean wheel install passed: projectionmodels {expected} (actuarialpy {actuarialpy.__version__})")
           PY

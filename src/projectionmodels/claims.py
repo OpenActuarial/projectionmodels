@@ -4,7 +4,7 @@ The projection pipeline evaluates, in order: complete reported claims to
 ultimate, remove seasonality, trend the experience rate to the credibility
 blend basis, blend with the complement **as stated**, trend the blended rate
 from the basis to each projection period, reapply seasonality, add flat
-``rate_loads``, and multiply by membership. The blend basis defaults to the
+``rate_loads``, and multiply by exposure. The blend basis defaults to the
 prospective midpoint of the horizon — the level at which manual and book
 rates are conventionally quoted — so a zero-credibility projection reproduces
 the complement rather than a trended copy of it.
@@ -256,7 +256,11 @@ class ClaimExperience:
 
 @dataclass
 class ClaimProjection:
-    """Project credibility-blended claim rates onto supplied membership.
+    """Project credibility-blended claim rates onto supplied exposure.
+
+    Exposure is whatever unit the book uses — member-months, policy
+    months, earned car-years — supplied by projection key and period and
+    named with ``exposure_col``.
 
     Pipeline, in order:
 
@@ -269,7 +273,7 @@ class ClaimProjection:
        midpoint (``trended_claim_rate``).
     4. Seasonality redistributes within the year and ``rate_loads`` are added,
        flat and outside the blend (``projected_claim_rate``).
-    5. Rates are multiplied by membership (``projected_claims``).
+    5. Rates are multiplied by exposure (``projected_claims``).
 
     Cost levels — ``complement_basis`` declares the level at which the
     complement is quoted:
@@ -292,15 +296,15 @@ class ClaimProjection:
     base_rates: pd.DataFrame
     projection_keys: tuple[str, ...] | list[str]
     claim_type_col: str
-    membership: pd.DataFrame
+    exposure: pd.DataFrame
     horizon: ProjectionHorizon
     trend: TrendAssumption
     seasonality: SeasonalityAssumption | None = None
     credibility: CredibilityAssumption | None = None
     complement_basis: str | pd.Timestamp = "prospective"
     rate_loads: Any = ()
-    membership_col: str = "member_months"
-    membership_period_col: str = "projection_period"
+    exposure_col: str = "exposure"
+    exposure_period_col: str = "projection_period"
     dates: ProjectionDates | None = None
     additional_assumptions: tuple[Assumption, ...] | list[Assumption] = field(
         default_factory=tuple
@@ -313,17 +317,17 @@ class ClaimProjection:
         missing = [column for column in required if column not in self.base_rates.columns]
         if missing:
             raise ValidationError(f"base_rates is missing columns: {missing}")
-        membership_keys = [
+        exposure_keys = [
             *self.projection_keys,
-            self.membership_period_col,
-            self.membership_col,
+            self.exposure_period_col,
+            self.exposure_col,
         ]
-        missing_membership = [
-            column for column in membership_keys if column not in self.membership.columns
+        missing_exposure = [
+            column for column in exposure_keys if column not in self.exposure.columns
         ]
-        if missing_membership:
+        if missing_exposure:
             raise ValidationError(
-                f"membership is missing columns: {missing_membership}"
+                f"exposure is missing columns: {missing_exposure}"
             )
         if self.credibility is not None and "complement_claim_rate" not in self.base_rates:
             raise ValidationError(
@@ -363,7 +367,7 @@ class ClaimProjection:
         cls,
         experience: ClaimExperience,
         *,
-        membership: pd.DataFrame,
+        exposure: pd.DataFrame,
         horizon: ProjectionHorizon,
         trend: TrendAssumption,
         seasonality: SeasonalityAssumption | None = None,
@@ -373,8 +377,8 @@ class ClaimProjection:
         complement_basis: str | pd.Timestamp = "prospective",
         rate_loads: Any = (),
         extra_record_cols: Iterable[str] = (),
-        membership_col: str = "member_months",
-        membership_period_col: str = "projection_period",
+        exposure_col: str = "exposure",
+        exposure_period_col: str = "projection_period",
         dates: ProjectionDates | None = None,
     ) -> ClaimProjection:
         base_rates = experience.to_base_rates(
@@ -387,15 +391,15 @@ class ClaimProjection:
             base_rates=base_rates,
             projection_keys=experience.projection_keys,
             claim_type_col=experience.claim_type_col,
-            membership=membership,
+            exposure=exposure,
             horizon=horizon,
             trend=trend,
             seasonality=seasonality,
             credibility=credibility,
             complement_basis=complement_basis,
             rate_loads=rate_loads,
-            membership_col=membership_col,
-            membership_period_col=membership_period_col,
+            exposure_col=exposure_col,
+            exposure_period_col=exposure_period_col,
             dates=dates,
         )
 
@@ -526,8 +530,8 @@ class ClaimProjection:
                 depends_on=("trended_claim_rate",),
             ),
             Calculation(
-                self.membership_col,
-                formula=lambda c: c[self.membership_col] * c["active_fraction"],
+                self.exposure_col,
+                formula=lambda c: c[self.exposure_col] * c["active_fraction"],
                 aggregation="sum",
                 grain=entity_grain,
                 reporting_role="exposure",
@@ -535,20 +539,20 @@ class ClaimProjection:
             CashFlow(
                 "projected_claims",
                 formula=lambda c: c["projected_claim_rate"]
-                * c[self.membership_col],
+                * c[self.exposure_col],
                 aggregation="sum",
                 grain=record_grain,
                 reporting_role="loss",
-                depends_on=("projected_claim_rate", self.membership_col),
+                depends_on=("projected_claim_rate", self.exposure_col),
             ),
             Metric(
-                "claim_pmpm",
-                formula=lambda c: c["projected_claims"] / c[self.membership_col],
+                "claims_per_exposure",
+                formula=lambda c: c["projected_claims"] / c[self.exposure_col],
                 aggregation="recalculate",
                 numerator="projected_claims",
-                denominator=self.membership_col,
+                denominator=self.exposure_col,
                 grain=record_grain,
-                depends_on=("projected_claims", self.membership_col),
+                depends_on=("projected_claims", self.exposure_col),
             ),
         ]
         return ProjectionModel(assumptions=assumptions, calculations=calculations)
@@ -565,12 +569,12 @@ class ClaimProjection:
             dates=self.dates,
         )
         dataset = ProjectionDataset(records)
-        membership = self.membership.rename(
-            columns={self.membership_period_col: "projection_period"}
+        exposure = self.exposure.rename(
+            columns={self.exposure_period_col: "projection_period"}
         )
         dataset.add_table(
-            "membership",
-            membership,
+            "exposure",
+            exposure,
             keys=[*self.projection_keys, "projection_period"],
         )
         return self._model().project(

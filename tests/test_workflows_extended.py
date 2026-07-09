@@ -114,12 +114,12 @@ def test_claim_projection_without_credibility_uses_experience_rate():
         claims_col="claims",
         exposure_col="exposure",
     )
-    membership = pd.DataFrame(
-        {"group": ["A"], "projection_period": ["2027-01"], "member_months": [10.0]}
+    exposure = pd.DataFrame(
+        {"group": ["A"], "projection_period": ["2027-01"], "exposure": [10.0]}
     )
     projection = ClaimProjection.from_experience(
         experience,
-        membership=membership,
+        exposure=exposure,
         horizon=ProjectionHorizon("2027-01-01", periods=1),
         trend=TrendAssumption.from_values("trend", 0.0),
     )
@@ -137,12 +137,12 @@ def test_claim_projection_validation_errors():
             "experience_midpoint": pd.to_datetime(["2026-01-01"]),
         }
     )
-    with pytest.raises(ValidationError, match="membership is missing"):
+    with pytest.raises(ValidationError, match="exposure is missing"):
         ClaimProjection(
             base,
             projection_keys=["group"],
             claim_type_col="claim_type",
-            membership=pd.DataFrame({"group": ["A"]}),
+            exposure=pd.DataFrame({"group": ["A"]}),
             horizon=ProjectionHorizon("2027-01-01", periods=1),
             trend=TrendAssumption.from_values("trend", 0.0),
         )
@@ -151,8 +151,8 @@ def test_claim_projection_validation_errors():
             base,
             projection_keys=["group"],
             claim_type_col="claim_type",
-            membership=pd.DataFrame(
-                {"group": ["A"], "projection_period": ["2027-01"], "member_months": [1.0]}
+            exposure=pd.DataFrame(
+                {"group": ["A"], "projection_period": ["2027-01"], "exposure": [1.0]}
             ),
             horizon=ProjectionHorizon("2027-01-01", periods=1),
             trend=TrendAssumption.from_values("trend", 0.0),
@@ -197,7 +197,7 @@ def test_percent_claims_expense_projection():
 @pytest.mark.parametrize(
     ("basis", "message"),
     [
-        ("pmpm", "membership"),
+        ("per_exposure", "exposure"),
         ("percent_premium", "premium"),
         ("percent_claims", "claims"),
     ],
@@ -210,8 +210,8 @@ def test_expense_projection_requires_basis_tables(basis, message):
 def test_expense_validation_and_supporting_table_columns():
     with pytest.raises(ValidationError, match="unknown expense bases"):
         make_expense_projection("unsupported")
-    with pytest.raises(ValidationError, match="membership table is missing"):
-        make_expense_projection("pmpm", membership=pd.DataFrame({"group": ["A"]})).project()
+    with pytest.raises(ValidationError, match="exposure table is missing"):
+        make_expense_projection("per_exposure", exposure=pd.DataFrame({"group": ["A"]})).project()
 
 
 def test_expense_projection_respects_partial_period_dates():

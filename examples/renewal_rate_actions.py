@@ -12,12 +12,12 @@ def run_example() -> dict[str, object]:
         {
             "group_id": ["A", "B"],
             "renewal_date": pd.to_datetime(["2027-03-01", "2027-07-01"]),
-            "current_premium_pmpm": [100.0, 100.0],
+            "current_premium_rate": [100.0, 100.0],
             "rate_action": [0.10, 0.20],
         }
     )
     periods = pd.period_range("2027-01", periods=12, freq="M").astype(str)
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         [
             {
                 "group_id": group_id,
@@ -31,13 +31,14 @@ def run_example() -> dict[str, object]:
     projection = pm.PremiumProjection(
         premium_data=premium_data,
         projection_keys=["group_id"],
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=pm.ProjectionHorizon("2027-01-01", periods=12),
         recurring_rate_action_col="rate_action",
     )
     results = projection.project()
     detail = results.detail().loc[
-        :, ["group_id", "projection_period", "is_renewal_period", "premium_pmpm", "premium"]
+        :, ["group_id", "projection_period", "is_renewal_period", "projected_premium_rate", "premium"]
     ]
     annual = results.summarize(
         by=["group_id", "calendar_year"],

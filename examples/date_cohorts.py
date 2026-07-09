@@ -1,4 +1,4 @@
-"""Date cohorts, new business, renewals, and partial-period membership."""
+"""Date cohorts, new business, renewals, and partial-period exposure."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def run_example() -> dict[str, object]:
             "renewal_date": pd.to_datetime(
                 ["2027-03-01", "2027-02-15", "2027-08-01"]
             ),
-            "current_premium_pmpm": [500.0, 525.0, 550.0],
+            "current_premium_rate": [500.0, 525.0, 550.0],
         }
     )
     premium_data = pm.DateCohort(
@@ -31,7 +31,7 @@ def run_example() -> dict[str, object]:
 
     periods = pd.period_range("2027-01", periods=18, freq="M").astype(str)
     monthly_members = {"A": 1_000.0, "B": 300.0, "C": 150.0}
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         [
             {
                 "group_id": group_id,
@@ -46,7 +46,8 @@ def run_example() -> dict[str, object]:
     projection = pm.PremiumProjection(
         premium_data=premium_data,
         projection_keys=["group_id"],
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=pm.ProjectionHorizon("2027-01-01", periods=18),
         dates=pm.ProjectionDates(
             entry_date="effective_date",

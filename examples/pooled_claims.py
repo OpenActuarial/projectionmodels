@@ -21,10 +21,10 @@ Run with: PYTHONPATH=src python examples/pooled_claims.py
 
 from __future__ import annotations
 
+import actuarialpy as ap
 import numpy as np
 import pandas as pd
 
-import actuarialpy as ap
 import projectionmodels as pm
 
 POOLING_POINT = 100_000.0
@@ -61,13 +61,14 @@ def _monthly_experience(detail: pd.DataFrame, claims_col: str) -> pd.DataFrame:
     return frame
 
 
-def _project(base_rates: pd.DataFrame, membership: pd.DataFrame,
+def _project(base_rates: pd.DataFrame, exposure: pd.DataFrame,
              horizon: pm.ProjectionHorizon, *, loads) -> pm.ProjectionResults:
     projection = pm.ClaimProjection(
         base_rates=base_rates,
         projection_keys=["group_id"],
         claim_type_col="claim_type",
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=horizon,
         trend=pm.TrendAssumption.from_values("claim_trend", 0.07),
         credibility=pm.CredibilityAssumption.from_weights("claim_credibility", 0.65),
@@ -115,7 +116,7 @@ def run_example() -> dict[str, object]:
     # 4. Project CY2027 with the pooling charge as a flat rate load, and once
     #    without the charge so the report can show the two pieces.
     horizon = pm.ProjectionHorizon("2027-01-01", periods=12)
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         {
             "group_id": "1102052",
             "projection_period": pd.period_range(
@@ -125,14 +126,14 @@ def run_example() -> dict[str, object]:
         }
     )
     charge = pm.Assumption("pooling_charge", POOLING_CHARGE_PMPM)
-    with_charge = _project(base_rates, membership, horizon, loads=(charge,))
-    without_charge = _project(base_rates, membership, horizon, loads=())
+    with_charge = _project(base_rates, exposure, horizon, loads=(charge,))
+    without_charge = _project(base_rates, exposure, horizon, loads=())
 
     summary = with_charge.summarize(by=["projection_period", "group_id"])
     annual = with_charge.summarize(by=["group_id"])
     annual_excluding = without_charge.summarize(by=["group_id"])
-    net_pmpm = float(annual["claim_pmpm"].iloc[0])
-    net_pmpm_excluding_charge = float(annual_excluding["claim_pmpm"].iloc[0])
+    net_pmpm = float(annual["claims_per_exposure"].iloc[0])
+    net_pmpm_excluding_charge = float(annual_excluding["claims_per_exposure"].iloc[0])
 
     return {
         "pooling_point": POOLING_POINT,

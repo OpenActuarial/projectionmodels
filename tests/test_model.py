@@ -17,7 +17,7 @@ def test_general_roll_forward_and_scenario():
         pd.DataFrame(
             {
                 "group_id": ["A", "B"],
-                "current_members": [100.0, 50.0],
+                "current_policies": [100.0, 50.0],
                 "current_rate": [10.0, 20.0],
             }
         ),
@@ -30,9 +30,9 @@ def test_general_roll_forward_and_scenario():
         ),
         roll_forwards=[
             RollForward(
-                "members",
-                initial="current_members",
-                formula=lambda x: x.prior("members") * x["retention"],
+                "policies",
+                initial="current_policies",
+                formula=lambda x: x.prior("policies") * x["retention"],
                 grain=["group_id"],
             ),
             RollForward(
@@ -45,7 +45,7 @@ def test_general_roll_forward_and_scenario():
         calculations=[
             CashFlow(
                 "amount",
-                formula=lambda x: x["members"] * x["rate"],
+                formula=lambda x: x["policies"] * x["rate"],
                 grain=["group_id"],
             )
         ],
@@ -70,7 +70,7 @@ def test_general_roll_forward_and_scenario():
         "scenario == 'baseline' and group_id == 'A'"
     )
     adverse_a = results.frame.query("scenario == 'adverse' and group_id == 'A'")
-    assert baseline_a["members"].tolist() == pytest.approx([90, 81])
+    assert baseline_a["policies"].tolist() == pytest.approx([90, 81])
     assert adverse_a["rate"].tolist() == pytest.approx([11, 12.1])
 
 
@@ -89,22 +89,22 @@ def test_supporting_table_broadcasts_to_components_without_changing_rows():
     from projectionmodels.advanced import ProjectionDataset
 
     dataset = ProjectionDataset(records).add_table(
-        "membership",
+        "exposure",
         pd.DataFrame(
-            {"group": ["A"], "projection_period": ["2027-01"], "members": [100.0]}
+            {"group": ["A"], "projection_period": ["2027-01"], "policies": [100.0]}
         ),
         keys=["group", "projection_period"],
     )
     model = ProjectionModel(
         calculations=[
             Calculation(
-                "members",
-                formula=lambda x: x["members"],
+                "policies",
+                formula=lambda x: x["policies"],
                 grain=["group"],
             ),
             Calculation(
                 "claims",
-                formula=lambda x: x["rate"] * x["members"],
+                formula=lambda x: x["rate"] * x["policies"],
                 grain=["group", "claim_type"],
             ),
         ]
@@ -112,5 +112,5 @@ def test_supporting_table_broadcasts_to_components_without_changing_rows():
     results = model.project(dataset, ProjectionHorizon("2027-01-01", periods=1))
     assert len(results.frame) == 2
     summary = results.summarize(by=["projection_period", "group"])
-    assert summary["members"].item() == 100.0
+    assert summary["policies"].item() == 100.0
     assert summary["claims"].item() == 1500.0

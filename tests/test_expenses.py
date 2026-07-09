@@ -10,12 +10,12 @@ def test_expense_projection_multiple_bases():
             "group": ["A", "A", "A"],
             "expense_type": ["admin", "fixed", "commission"],
             "base_value": [2.0, 100.0, 0.05],
-            "basis": ["pmpm", "fixed_monthly", "percent_premium"],
+            "basis": ["per_exposure", "fixed_monthly", "percent_premium"],
             "base_date": pd.to_datetime(["2027-01-01"] * 3),
         }
     )
-    membership = pd.DataFrame(
-        {"group": ["A"], "projection_period": ["2027-01"], "member_months": [10.0]}
+    exposure = pd.DataFrame(
+        {"group": ["A"], "projection_period": ["2027-01"], "exposure": [10.0]}
     )
     premium = pd.DataFrame(
         {"group": ["A"], "projection_period": ["2027-01"], "premium": [1000.0]}
@@ -29,7 +29,7 @@ def test_expense_projection_multiple_bases():
         base_date_col="base_date",
         horizon=ProjectionHorizon("2027-01-01", periods=1),
         trend=TrendAssumption.from_values("expense_trend", 0.0),
-        membership=membership,
+        exposure=exposure,
         premium=premium,
     )
     results = projection.project()

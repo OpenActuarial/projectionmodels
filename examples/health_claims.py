@@ -1,4 +1,4 @@
-"""Claims by claim type with supplied trend, seasonality, credibility, and membership."""
+"""Claims by claim type with supplied trend, seasonality, credibility, and exposure."""
 
 from __future__ import annotations
 
@@ -114,14 +114,14 @@ def run_example() -> dict[str, object]:
             {
                 "product_id": ["PPO", "PPO"],
                 "claim_type": ["inpatient", "outpatient"],
-                "manual_claim_pmpm": [108.0, 62.0],
+                "manual_claims_per_exposure": [108.0, 62.0],
             }
         ),
         lookup=["product_id", "claim_type"],
-        value_col="manual_claim_pmpm",
+        value_col="manual_claims_per_exposure",
     )
 
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         {
             "group_id": ["A"] * 12,
             "product_id": ["PPO"] * 12,
@@ -134,7 +134,8 @@ def run_example() -> dict[str, object]:
 
     projection = pm.ClaimProjection.from_experience(
         experience,
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         horizon=pm.ProjectionHorizon("2027-01-01", periods=12),
         trend=trend,
         seasonality=seasonality,
@@ -145,11 +146,11 @@ def run_example() -> dict[str, object]:
     results = projection.project()
     by_type = results.summarize(
         by=["projection_period", "claim_type"],
-        measures=["member_months", "projected_claims", "claim_pmpm"],
+        measures=["member_months", "projected_claims", "claims_per_exposure"],
     )
     total = results.summarize(
         by=["projection_period"],
-        measures=["member_months", "projected_claims", "claim_pmpm"],
+        measures=["member_months", "projected_claims", "claims_per_exposure"],
     )
     return {"results": results, "by_type": by_type, "total": total}
 

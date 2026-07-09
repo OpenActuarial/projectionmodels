@@ -13,13 +13,13 @@ def run_example() -> dict[str, object]:
             "group_id": ["A", "A", "A", "A"],
             "expense_type": ["administration", "overhead", "commission", "claim_admin"],
             "base_value": [32.0, 5_000.0, 0.025, 0.010],
-            "basis": ["pmpm", "fixed_monthly", "percent_premium", "percent_claims"],
+            "basis": ["per_exposure", "fixed_monthly", "percent_premium", "percent_claims"],
             "base_date": pd.to_datetime(["2027-01-01"] * 4),
         }
     )
 
     periods = pd.period_range("2027-01", periods=12, freq="M").astype(str)
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         {
             "group_id": ["A"] * 12,
             "projection_period": periods,
@@ -50,7 +50,8 @@ def run_example() -> dict[str, object]:
         base_date_col="base_date",
         horizon=pm.ProjectionHorizon("2027-01-01", periods=12),
         trend=pm.TrendAssumption.from_values("expense_trend", 0.04),
-        membership=membership,
+        exposure=exposure,
+        exposure_col="member_months",
         premium=premium,
         claims=claims,
     )

@@ -20,7 +20,7 @@ def test_claim_experience_and_projection_by_claim_type():
             "claim_type": ["ip", "ip", "op", "op"],
             "month": pd.to_datetime(["2026-01-01", "2026-02-01"] * 2),
             "claims": [1000.0, 1000.0, 500.0, 500.0],
-            "member_months": [100.0, 100.0, 100.0, 100.0],
+            "exposure": [100.0, 100.0, 100.0, 100.0],
         }
     )
     experience = ClaimExperience(
@@ -29,7 +29,7 @@ def test_claim_experience_and_projection_by_claim_type():
         claim_type_col="claim_type",
         date_col="month",
         claims_col="claims",
-        exposure_col="member_months",
+        exposure_col="exposure",
     )
     seasonality_values = pd.DataFrame(
         {
@@ -62,17 +62,17 @@ def test_claim_experience_and_projection_by_claim_type():
         lookup=["claim_type"],
         value_col="manual",
     )
-    membership = pd.DataFrame(
+    exposure = pd.DataFrame(
         {
             "group_id": ["A", "A"],
             "product_id": ["PPO", "PPO"],
             "projection_period": ["2027-01", "2027-02"],
-            "member_months": [100.0, 100.0],
+            "exposure": [100.0, 100.0],
         }
     )
     projection = ClaimProjection.from_experience(
         experience,
-        membership=membership,
+        exposure=exposure,
         horizon=ProjectionHorizon("2027-01-01", periods=2),
         trend=trend,
         seasonality=seasonality,
@@ -99,7 +99,7 @@ def test_claim_experience_and_projection_by_claim_type():
         op["projected_claim_rate"].iloc[0]
     )
     total = results.summarize(by=["projection_period", "group_id"])
-    assert total["member_months"].tolist() == [100.0, 100.0]
+    assert total["exposure"].tolist() == [100.0, 100.0]
 
 
 # ---------------------------------------------------------------------------
@@ -121,13 +121,13 @@ def _base_rates(rate, manual, experience_midpoint):
     )
 
 
-def _membership(start, periods):
+def _exposure(start, periods):
     labels = pd.period_range(start, periods=periods, freq="M").astype(str)
     return pd.DataFrame(
         {
             "group_id": "G",
             "projection_period": labels,
-            "member_months": 1_000.0,
+            "exposure": 1_000.0,
         }
     )
 
@@ -143,7 +143,7 @@ def _project(base, *, z, trend, start, periods, basis="prospective",
         base_rates=base,
         projection_keys=["group_id"],
         claim_type_col="claim_type",
-        membership=_membership(start, periods),
+        exposure=_exposure(start, periods),
         horizon=ProjectionHorizon(start, periods=periods),
         trend=TrendAssumption.from_values("claim_trend", trend),
         seasonality=seasonality,
@@ -154,21 +154,21 @@ def _project(base, *, z, trend, start, periods, basis="prospective",
     return projection.project()
 
 
-def _annual_pmpm(results):
+def _annual_rate(results):
     summary = results.summarize(by=["group_id"])
-    return float(summary["claim_pmpm"].iloc[0])
+    return float(summary["claims_per_exposure"].iloc[0])
 
 
 def test_zero_credibility_reproduces_the_complement_as_stated():
     base = _base_rates(380.0, 400.0, "2025-06-15")
     single = _project(base, z=0.0, trend=0.08, start="2027-06-01", periods=1)
-    assert _annual_pmpm(single) == pytest.approx(400.0, rel=1e-12)
+    assert _annual_rate(single) == pytest.approx(400.0, rel=1e-12)
 
     year = _project(base, z=0.0, trend=0.08, start="2027-01-01", periods=12)
     # Within-horizon trend around the prospective midpoint nets to ~zero. The
     # pre-0.5.0 ordering produced ~468 here (the manual times two years of
     # trend), so the tolerance below is a regression guard, not slack.
-    assert _annual_pmpm(year) == pytest.approx(400.0, rel=5e-4)
+    assert _annual_rate(year) == pytest.approx(400.0, rel=5e-4)
 
 
 def test_full_credibility_is_invariant_to_the_blend_basis():
@@ -190,14 +190,14 @@ def test_experience_basis_reproduces_the_legacy_blend_then_trend_order():
         base, z=0.0, trend=0.08, start="2027-06-01", periods=1, basis="experience"
     )
     # Exactly 24 months of trend applied to the complement: 400 x 1.08^2.
-    assert _annual_pmpm(legacy) == pytest.approx(400.0 * 1.08**2, rel=1e-12)
+    assert _annual_rate(legacy) == pytest.approx(400.0 * 1.08**2, rel=1e-12)
 
 
 def test_partial_credibility_blends_trended_experience_with_the_complement():
     base = _base_rates(380.0, 400.0, "2025-06-15")
     results = _project(base, z=0.5, trend=0.08, start="2027-06-01", periods=1)
     expected = 0.5 * 380.0 * 1.08**2 + 0.5 * 400.0
-    assert _annual_pmpm(results) == pytest.approx(expected, rel=1e-12)
+    assert _annual_rate(results) == pytest.approx(expected, rel=1e-12)
     frame = results.frame
     assert frame["trended_experience_rate"].iloc[0] == pytest.approx(
         380.0 * 1.08**2
@@ -220,4 +220,4 @@ def test_rate_loads_are_added_flat_after_seasonality_and_outside_the_blend():
     assert rates.tolist() == pytest.approx(
         [400.0 * 1.1 + 14.5, 400.0 * 0.9 + 14.5]
     )
-    assert _annual_pmpm(results) == pytest.approx(400.0 + 14.5, rel=1e-12)
+    assert _annual_rate(results) == pytest.approx(400.0 + 14.5, rel=1e-12)

@@ -71,7 +71,8 @@ class RenewalRateActions:
 
 @dataclass
 class PremiumProjection:
-    """Project premium rates and premium using supplied membership.
+    """Project premium rates and premium using supplied exposure
+    (member-months, policy months, and so on — see ``exposure_col``).
 
     A recurring action column is applied in every period marked
     ``is_renewal_period``. A :class:`RenewalRateActions` schedule is applied once
@@ -81,11 +82,11 @@ class PremiumProjection:
 
     premium_data: pd.DataFrame
     projection_keys: tuple[str, ...] | list[str]
-    membership: pd.DataFrame
+    exposure: pd.DataFrame
     horizon: ProjectionHorizon
-    current_rate_col: str = "current_premium_pmpm"
-    membership_col: str = "member_months"
-    membership_period_col: str = "projection_period"
+    current_rate_col: str = "current_premium_rate"
+    exposure_col: str = "exposure"
+    exposure_period_col: str = "projection_period"
     renewal_date_col: str = "renewal_date"
     recurring_rate_action_col: str | None = None
     rate_actions: RenewalRateActions | None = None
@@ -102,23 +103,23 @@ class PremiumProjection:
         if self.premium_data.duplicated(list(self.projection_keys)).any():
             raise ValidationError("premium_data must be unique at projection_keys")
 
-        membership_required = [
+        exposure_required = [
             *self.projection_keys,
-            self.membership_period_col,
-            self.membership_col,
+            self.exposure_period_col,
+            self.exposure_col,
         ]
-        missing_membership = [
-            column for column in membership_required if column not in self.membership.columns
+        missing_exposure = [
+            column for column in exposure_required if column not in self.exposure.columns
         ]
-        if missing_membership:
+        if missing_exposure:
             raise ValidationError(
-                f"membership is missing columns: {missing_membership}"
+                f"exposure is missing columns: {missing_exposure}"
             )
-        if self.membership.duplicated(
-            [*self.projection_keys, self.membership_period_col]
+        if self.exposure.duplicated(
+            [*self.projection_keys, self.exposure_period_col]
         ).any():
             raise ValidationError(
-                "membership must be unique by projection keys and projection period"
+                "exposure must be unique by projection keys and projection period"
             )
         if self.rate_actions is not None and tuple(self.rate_actions.projection_keys) != tuple(
             self.projection_keys
@@ -140,7 +141,7 @@ class PremiumProjection:
         grain = tuple(self.projection_keys)
 
         def premium_rate(context):
-            rate = context.prior("premium_pmpm").astype(float)
+            rate = context.prior("projected_premium_rate").astype(float)
             if self.recurring_rate_action_col is not None:
                 action = context[self.recurring_rate_action_col].fillna(0.0).astype(float)
                 rate = rate * (1.0 + action.where(context["is_renewal_period"], 0.0))
@@ -152,7 +153,7 @@ class PremiumProjection:
         return ProjectionModel(
             roll_forwards=[
                 RollForward(
-                    "premium_pmpm",
+                    "projected_premium_rate",
                     initial=self.current_rate_col,
                     formula=premium_rate,
                     aggregation="mean",
@@ -161,19 +162,19 @@ class PremiumProjection:
             ],
             calculations=[
                 Calculation(
-                    self.membership_col,
-                    formula=lambda c: c[self.membership_col] * c["active_fraction"],
+                    self.exposure_col,
+                    formula=lambda c: c[self.exposure_col] * c["active_fraction"],
                     aggregation="sum",
                     grain=grain,
                     reporting_role="exposure",
                 ),
                 CashFlow(
                     "premium",
-                    formula=lambda c: c["premium_pmpm"] * c[self.membership_col],
+                    formula=lambda c: c["projected_premium_rate"] * c[self.exposure_col],
                     aggregation="sum",
                     grain=grain,
                     reporting_role="revenue",
-                    depends_on=("premium_pmpm", self.membership_col),
+                    depends_on=("projected_premium_rate", self.exposure_col),
                 ),
             ],
         )
@@ -189,12 +190,12 @@ class PremiumProjection:
             dates=self.dates,
         )
         dataset = ProjectionDataset(records)
-        membership = self.membership.rename(
-            columns={self.membership_period_col: "projection_period"}
+        exposure = self.exposure.rename(
+            columns={self.exposure_period_col: "projection_period"}
         )
         dataset.add_table(
-            "membership",
-            membership,
+            "exposure",
+            exposure,
             keys=[*self.projection_keys, "projection_period"],
         )
         if self.rate_actions is not None:

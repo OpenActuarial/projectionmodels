@@ -5,46 +5,45 @@ from __future__ import annotations
 import pandas as pd
 
 import projectionmodels as pm
-import projectionmodels.advanced as pma
 
 
 def run_example() -> dict[str, object]:
-    records = pma.ProjectionData(
+    records = pm.ProjectionData(
         pd.DataFrame(
             {
                 "group_id": ["A", "B"],
                 "product_id": ["PPO", "HMO"],
                 "current_members": [1_000.0, 600.0],
-                "current_premium_rate": [525.0, 475.0],
+                "current_premium_pmpm": [525.0, 475.0],
             }
         ),
         projection_keys=["group_id", "product_id"],
     )
 
-    model = pma.ProjectionModel(
-        assumptions=pma.AssumptionSet(
+    model = pm.ProjectionModel(
+        assumptions=pm.AssumptionSet(
             pm.Assumption("retention_rate", 0.995),
             pm.TrendAssumption.from_values("premium_trend", 0.05),
         ),
         roll_forwards=[
-            pma.RollForward(
+            pm.RollForward(
                 "members",
                 initial="current_members",
                 formula=lambda x: x.prior("members") * x["retention_rate"],
                 grain=["group_id", "product_id"],
             ),
-            pma.RollForward(
-                "projected_premium_rate",
-                initial="current_premium_rate",
-                formula=lambda x: x.prior("projected_premium_rate")
+            pm.RollForward(
+                "premium_pmpm",
+                initial="current_premium_pmpm",
+                formula=lambda x: x.prior("premium_pmpm")
                 * (1 + x["premium_trend"]) ** x.year_fraction,
                 grain=["group_id", "product_id"],
             ),
         ],
         calculations=[
-            pma.CashFlow(
+            pm.CashFlow(
                 "premium",
-                formula=lambda x: x["members"] * x["projected_premium_rate"],
+                formula=lambda x: x["members"] * x["premium_pmpm"],
                 grain=["group_id", "product_id"],
                 reporting_role="revenue",
             )
@@ -58,7 +57,7 @@ def run_example() -> dict[str, object]:
         adjustments=[
             pm.Adjustment(
                 name="Group A renewal premium adjustment",
-                target="projected_premium_rate",
+                target="premium_pmpm",
                 method="multiply",
                 value=1.08,
                 filters={"group_id": "A"},

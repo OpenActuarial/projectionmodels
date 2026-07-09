@@ -1,4 +1,4 @@
-"""Focused actuarial claim, premium, membership, and expense projections."""
+"""Focused actuarial claim, premium, and expense projection workflows on supplied exposure."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ __all__ = [
     "ValidationError",
 ]
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 # Backward-compatible access for the 0.3 advanced API.  These names are no
 # longer advertised at the package root and will move permanently to
