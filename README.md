@@ -1,5 +1,7 @@
 # projectionmodels
 
+[![CI](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/projectionmodels)](https://pypi.org/project/projectionmodels/)
+
 Focused actuarial projections of claims, premium, and expenses on supplied exposure.
 
 The package is intentionally organized around concrete workflows. Most users
