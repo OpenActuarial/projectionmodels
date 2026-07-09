@@ -132,7 +132,7 @@ def test_tests_use_the_installed_actuarialpy_package():
     import importlib.util
     from pathlib import Path
 
-    assert ap.__version__.startswith(("0.41.", "0.42."))
+    assert ap.__version__.startswith(("0.41.", "0.42.", "0.43.", "0.44."))
     assert ap.__file__ is not None
     # The imported module must be the one the import system resolves — an
     # injected fake (a bare ModuleType in sys.modules) fails this — and it

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.1] - 2026-07-09
+
+Compatibility release for actuarialpy 0.43/0.44 — no functional changes.
+
+### Changed
+
+- **actuarialpy cap raised to `<0.45.0`** (was `<0.43.0`). actuarialpy
+  0.43–0.44 moved presentation and I/O helpers (`UnderwritingSummary`,
+  the `profiles` module, `to_excel_report`) into `experiencestudies`;
+  every primitive `projectionmodels` calls (`completion_factors`,
+  `fit_trend`, `seasonality_factors`, `limited_fluctuation_z`,
+  `per_exposure`, and the apply/deseasonalize helpers) is unchanged.
+  The full test suite passes against 0.44.
+- The installed-package guard test now accepts actuarialpy 0.43/0.44.
+
 ## [0.6.0] - 2026-07-08
 
 ### Changed

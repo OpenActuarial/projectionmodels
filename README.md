@@ -14,7 +14,7 @@ engine.
 pip install projectionmodels
 ```
 
-`projectionmodels` currently supports `actuarialpy>=0.41,<0.43` and Python
+`projectionmodels` currently supports `actuarialpy>=0.41,<0.45` and Python
 3.10–3.13.
 
 ## Public API
