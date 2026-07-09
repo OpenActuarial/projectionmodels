@@ -5,10 +5,11 @@ from __future__ import annotations
 import pandas as pd
 
 import projectionmodels as pm
+import projectionmodels.advanced as pma
 
 
 def run_example() -> dict[str, object]:
-    records = pm.ProjectionData(
+    records = pma.ProjectionData(
         pd.DataFrame(
             {
                 "member_id": ["M1", "M2", "M3"],
@@ -51,10 +52,10 @@ def run_example() -> dict[str, object]:
         ),
         lookup=["product_id"],
     )
-    model = pm.ProjectionModel(
-        assumptions=pm.AssumptionSet(lapse, mortality),
+    model = pma.ProjectionModel(
+        assumptions=pma.AssumptionSet(lapse, mortality),
         roll_forwards=[
-            pm.RollForward(
+            pma.RollForward(
                 "inforce_probability",
                 initial="initial_inforce_probability",
                 formula=lambda x: x.prior("inforce_probability")
@@ -64,7 +65,7 @@ def run_example() -> dict[str, object]:
             )
         ],
         calculations=[
-            pm.CashFlow(
+            pma.CashFlow(
                 "premium",
                 formula=lambda x: x["inforce_probability"]
                 * x["monthly_premium"]
@@ -73,7 +74,7 @@ def run_example() -> dict[str, object]:
                 grain=["member_id"],
                 reporting_role="revenue",
             ),
-            pm.CashFlow(
+            pma.CashFlow(
                 "expected_death_benefit",
                 formula=lambda x: x.prior("inforce_probability")
                 * x["monthly_mortality_rate"]

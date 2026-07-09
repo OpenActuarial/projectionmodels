@@ -5,43 +5,44 @@ from __future__ import annotations
 import pandas as pd
 
 import projectionmodels as pm
+import projectionmodels.advanced as pma
 
 
 def run_example() -> dict[str, object]:
-    records = pm.ProjectionData(
+    records = pma.ProjectionData(
         pd.DataFrame(
             {
                 "group_id": ["A", "B"],
                 "product_id": ["PPO", "HMO"],
                 "current_members": [1_000.0, 600.0],
-                "current_premium_pmpm": [525.0, 475.0],
+                "current_premium_rate": [525.0, 475.0],
             }
         ),
         projection_keys=["group_id", "product_id"],
     )
 
-    model = pm.ProjectionModel(
-        assumptions=pm.AssumptionSet(
+    model = pma.ProjectionModel(
+        assumptions=pma.AssumptionSet(
             pm.Assumption("retention_rate", 0.995),
             pm.TrendAssumption.from_values("premium_trend", 0.05),
         ),
         roll_forwards=[
-            pm.RollForward(
+            pma.RollForward(
                 "members",
                 initial="current_members",
                 formula=lambda x: x.prior("members") * x["retention_rate"],
                 grain=["group_id", "product_id"],
             ),
-            pm.RollForward(
+            pma.RollForward(
                 "premium_pmpm",
-                initial="current_premium_pmpm",
+                initial="current_premium_rate",
                 formula=lambda x: x.prior("premium_pmpm")
                 * (1 + x["premium_trend"]) ** x.year_fraction,
                 grain=["group_id", "product_id"],
             ),
         ],
         calculations=[
-            pm.CashFlow(
+            pma.CashFlow(
                 "premium",
                 formula=lambda x: x["members"] * x["premium_pmpm"],
                 grain=["group_id", "product_id"],

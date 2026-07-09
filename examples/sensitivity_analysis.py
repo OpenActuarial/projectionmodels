@@ -5,10 +5,11 @@ from __future__ import annotations
 import pandas as pd
 
 import projectionmodels as pm
+import projectionmodels.advanced as pma
 
 
 def run_example() -> dict[str, object]:
-    records = pm.ProjectionData(
+    records = pma.ProjectionData(
         pd.DataFrame(
             {
                 "product_id": ["PPO", "HMO"],
@@ -18,10 +19,10 @@ def run_example() -> dict[str, object]:
         ),
         projection_keys=["product_id"],
     )
-    model = pm.ProjectionModel(
-        assumptions=pm.AssumptionSet(pm.Assumption("claim_trend", 0.06)),
+    model = pma.ProjectionModel(
+        assumptions=pma.AssumptionSet(pm.Assumption("claim_trend", 0.06)),
         roll_forwards=[
-            pm.RollForward(
+            pma.RollForward(
                 "claim_pmpm",
                 initial="base_claim_pmpm",
                 formula=lambda x: x.prior("claim_pmpm")
@@ -31,7 +32,7 @@ def run_example() -> dict[str, object]:
             )
         ],
         calculations=[
-            pm.CashFlow(
+            pma.CashFlow(
                 "projected_claims",
                 formula=lambda x: x["claim_pmpm"] * x["member_months"],
                 grain=["product_id"],
@@ -39,7 +40,7 @@ def run_example() -> dict[str, object]:
             )
         ],
     )
-    sensitivity = pm.Sensitivity(
+    sensitivity = pma.Sensitivity(
         target="claim_trend",
         values=[0.04, 0.06, 0.08],
         method="set",
