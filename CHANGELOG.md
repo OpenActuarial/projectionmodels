@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.6.3] - 2026-07-10
+
+Documentation release — no functional changes.
+
+### Added
+
+- **Class docstrings for `GroupProjection`, `BookProjection`,
+  `PMPMProjection`, and `PremiumRollforward`.** Sphinx
+  `automodule :members:` silently omits objects without a docstring, so the
+  0.6.2 group/book family was absent from the API reference on
+  openactuarial.org despite being fully exported.
+- A guard test (`tests/test_public_api_docstrings.py`) asserting every
+  function and class in `__all__` carries a docstring, turning a silent
+  autodoc omission into a CI failure.
+
+## [0.6.2] - 2026-07-10
+
+Entry written retroactively in 0.6.3 — 0.6.2 shipped without one.
+
+### Added
+
+- **The group/book projection family**: `GroupProjection` (one group's
+  premium and claims projected together on a shared monthly membership,
+  renewal-weighted), `BookProjection` (group projections rolled up to book
+  totals, per-group and monthly), `PMPMProjection` (the
+  credibility-blend → trend → plan → pooling claims engine),
+  `PremiumRollforward` (the stored premium rolled forward by rate action
+  and plan change), and `new_business` (the sold-but-new case: fully manual
+  claims, close ratio in the role of renewal probability).
+- `examples/demo.py`.
+
+### Changed
+
+- `__version__` now resolves via `importlib.metadata`, making
+  `pyproject.toml` the single source of truth for the version.
+- CI: Windows added to the OS matrix, and the actuarialpy lanes
+  restructured to a `latest-allowed` default plus pinned range edges
+  (0.41.0 and 0.44.0) that cannot go stale when the pin moves.
+
 ## [0.6.1] - 2026-07-09
 
 Compatibility release for actuarialpy 0.43/0.44 — no functional changes.

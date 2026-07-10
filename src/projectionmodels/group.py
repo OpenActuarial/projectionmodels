@@ -33,6 +33,57 @@ class GroupProjectionResult:
 
 
 class GroupProjection:
+    """One group's forward roll: premium and claims projected together on one membership.
+
+    Composes :class:`PremiumRollforward` (the stored premium rolled
+    forward by rate action and plan change) and :class:`PMPMProjection`
+    (the credibility-blended, trended, pooled claims PMPM) on the supplied
+    monthly membership, then weights both by the renewal probability -- a
+    lapsed group books neither, so ``loss_ratio`` is unaffected by
+    ``renewal_prob`` while ``expected_premium`` / ``expected_claims``
+    carry it. This is the unit :class:`BookProjection` loops over the
+    in-force book.
+
+    Exposes ``monthly`` (month, member-months, premium, claims --
+    conditional on renewal), the conditional totals ``premium`` /
+    ``claims`` / ``loss_ratio``, and the renewal-weighted
+    ``expected_premium`` / ``expected_claims``; the full detail,
+    including the claims and premium build-ups, sits on ``result``
+    (:class:`GroupProjectionResult`).
+
+    Parameters
+    ----------
+    prospective_membership : array-like
+        Projected member-months by prospective month; the horizon
+        everything else is evaluated on.
+    seasonal_factors : array-like, optional
+        Monthly claim seasonality (averaging one); redistributes claims
+        across months without changing the annual total.
+    current_premium, current_member_months : float
+        The stored premium and its member-months -- rolled forward, never
+        rebuilt from experience.
+    rate_action, plan_change : float, optional
+        Renewal rate action and plan-value change, as decimals.
+    book_pmpm, claim_trend, exp_midpoint, prosp_midpoint : float
+        Book claims PMPM and annual trend, applied
+        midpoint-to-midpoint between the experience and projection
+        periods.
+    group_pmpm, group_claims, group_member_months : optional
+        The group's own experience -- the PMPM directly, or claims and
+        member-months to derive it.
+    group_claim_count, credibility, full_credibility_claims : optional
+        Credibility, or the claim count to derive it by limited
+        fluctuation (default full-credibility standard 1082 claims).
+    pooling_pmpm : float, optional
+        Large-claim pooling charge per member-month, trended alongside
+        claims.
+    plan_affects_claims : bool, optional
+        Whether ``plan_change`` also scales claims (default True).
+    renewal_prob : float, optional
+        Probability the group renews -- supplied (e.g. from
+        underwriting), not modelled here; weights the expected figures.
+    """
+
     def __init__(self, *, prospective_membership, seasonal_factors=None,
                  # premium (from DB)
                  current_premium, current_member_months, rate_action=0.0, plan_change=0.0,

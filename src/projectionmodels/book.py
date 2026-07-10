@@ -25,6 +25,27 @@ class BookResult:
 
 
 class BookProjection:
+    """Roll a set of group projections up into the book: totals, per-group, monthly.
+
+    Accepts :class:`GroupProjection` objects (or their results) and
+    aggregates the *expected* -- renewal-probability-weighted -- premium
+    and claims, so a group contributes in proportion to how likely it is
+    to renew. Exposes ``premium`` / ``claims`` / ``loss_ratio`` (book
+    totals), ``by_group`` (one row per group with its expected figures and
+    renewal probability), and ``monthly`` (expected premium and claims by
+    projection month, summed over the book); the assembled
+    :class:`BookResult` sits on ``result``. All inputs must share one
+    projection horizon -- the monthly frames are summed elementwise.
+
+    Parameters
+    ----------
+    projections : sequence of GroupProjection or GroupProjectionResult
+        The in-force renewals and new business to aggregate.
+    labels : sequence of str, optional
+        Group labels for ``by_group`` (default ``grp_0``, ``grp_1``, ...);
+        must match ``projections`` in length.
+    """
+
     def __init__(self, projections, labels=None):
         results = [p.result if isinstance(p, GroupProjection) else p for p in projections]
         if not results:

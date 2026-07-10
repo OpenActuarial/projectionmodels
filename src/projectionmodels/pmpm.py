@@ -34,6 +34,44 @@ class PMPMResult:
 
 
 class PMPMProjection:
+    r"""The claims engine: credibility-blend, trend, plan-adjust, and add pooling.
+
+    Blends the group's own PMPM against the book PMPM with credibility
+    ``Z`` (limited fluctuation from the group's claim count, capped at
+    one, unless supplied), trends midpoint-to-midpoint, applies the plan
+    factor, and adds the trended large-claim pooling charge:
+
+    .. math::
+        \text{projected} = \bigl[Z \cdot \text{group} +
+        (1 - Z) \cdot \text{book}\bigr] \cdot \text{trend} \cdot
+        \text{plan} + \text{pooling} \cdot \text{trend}
+
+    Note the pooling charge is trended but not plan-adjusted.
+    ``projected_pmpm`` is a rate per member-month; :meth:`claims` turns
+    it into monthly claim dollars on a membership vector, with optional
+    seasonal factors (averaging one) that redistribute across months
+    without changing the annual total. The full build-up sits on
+    ``result`` (:class:`PMPMResult`).
+
+    Parameters
+    ----------
+    book_pmpm : float
+        The book (manual) claims PMPM the blend shrinks toward.
+    claim_trend, exp_midpoint, prosp_midpoint : float
+        Annual claim trend, applied between the experience-period and
+        projection-period midpoints.
+    group_pmpm, group_claims, group_member_months : optional
+        The group's experience PMPM, or claims and member-months to
+        derive it.
+    group_claim_count, credibility, full_credibility_claims : optional
+        Credibility, or the claim count to derive it by limited
+        fluctuation (default full-credibility standard 1082 claims).
+    plan_factor : float, optional
+        Multiplicative plan-value adjustment on the blended PMPM.
+    pooling_pmpm : float, optional
+        Large-claim pooling charge per member-month.
+    """
+
     def __init__(self, *, book_pmpm, claim_trend, exp_midpoint, prosp_midpoint,
                  group_pmpm=None, group_claims=None, group_member_months=None,
                  group_claim_count=None, credibility=None, full_credibility_claims=1082.0,

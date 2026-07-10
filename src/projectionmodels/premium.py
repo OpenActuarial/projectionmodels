@@ -26,6 +26,26 @@ class PremiumResult:
 
 
 class PremiumRollforward:
+    """Roll the stored premium forward by known factors -- never rebuilt from losses.
+
+    ``projected_pmpm = (current_premium / current_member_months) * (1 +
+    rate_action) * (1 + plan_change)``. Premium is level per member-month
+    (it earns evenly), so :meth:`premium` scales by the membership vector
+    with no seasonal shape -- unlike claims. Rebuilding premium from loss
+    experience is ``ratingmodels``' job; this projects the figure the
+    database already holds. The build-up sits on ``result``
+    (:class:`PremiumResult`).
+
+    Parameters
+    ----------
+    current_premium, current_member_months : float
+        The stored premium and its member-months; their ratio is the
+        current PMPM.
+    rate_action, plan_change : float, optional
+        Renewal rate action and plan-value change, as decimals
+        (default 0).
+    """
+
     def __init__(self, *, current_premium, current_member_months,
                  rate_action=0.0, plan_change=0.0):
         current_pmpm = current_premium / current_member_months
