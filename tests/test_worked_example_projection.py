@@ -1,12 +1,13 @@
 """Regression: the renewal-cycle worked-example page numbers stay true.
 
 Pins docs page ``worked-example-projection.md`` (Example 7) in the
-OpenActuarial docs repo. Drop into ``projectionmodels/tests/``.
+OpenActuarial docs repo — the projectionmodels segment. The pricing
+segment (indication and renewal constraints) is pinned in ratingmodels'
+suite; the issued actions cross over here as constants.
 """
 import numpy as np
 import pandas as pd
 import pytest
-import ratingmodels as rm
 
 import projectionmodels as pm
 from projectionmodels.integrations import actuarialpy as apx
@@ -128,27 +129,19 @@ def test_renewal_cycle_page_numbers():
     assert round(row["credible_claim_rate"], 2) == 224.91
     assert round(row["projected_claim_rate"], 2) == 238.75
 
+    # Issued renewal actions from the pricing step. Example 7's indication
+    # and cap/floor numbers (A capped at +10%, B at formula +9.42%) are
+    # pinned in ratingmodels' suite (test_worked_example_projection_
+    # indication.py) — ratingmodels' actuarialpy floor sits above this
+    # repo's tested range, so the pricing segment cannot import here.
     current = pd.Series({"A": 585.0, "B": 612.0})
-    retention = rm.RetentionLoad(fixed_expense=24.0,
-                                 variable_expense_ratio=0.030,
-                                 profit_margin=0.02)
-    indication = rm.RateIndication(
-        experience_loss_cost=lc * 1.012, manual_loss_cost=lc * 1.012,
-        credibility=1.0, current_rate=current, retention=retention)
-    change = indication.indicated_rate_change()
-    assert round(float(change["A"]), 4) == 0.1183
-    assert round(float(change["B"]), 4) == 0.0942
-    action = rm.renew(current, indication.indicated_rate(), cap=0.10, floor=0.0)
-    frame = action.to_frame()
-    assert bool(frame.loc["A", "capped"]) and not bool(frame.loc["B", "capped"])
-    assert round(float(frame.loc["A", "proposed_rate"]), 2) == 643.50
-    assert round(float(frame.loc["B", "proposed_rate"]), 2) == 669.64
+    issued = np.array([0.10, 0.09418300653594769])
 
     actions = pm.RenewalRateActions(
         pd.DataFrame({"group_id": ["A", "B"],
                       "effective_date": pd.to_datetime(["2027-04-01",
                                                         "2027-09-01"]),
-                      "rate_action": action.proposed_change.to_numpy()}),
+                      "rate_action": issued}),
         projection_keys=["group_id"])
     premium_results = pm.PremiumProjection(
         premium_data=pd.DataFrame({
