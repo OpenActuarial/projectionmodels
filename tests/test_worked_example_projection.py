@@ -6,9 +6,9 @@ OpenActuarial docs repo. Drop into ``projectionmodels/tests/``.
 import numpy as np
 import pandas as pd
 import pytest
+import ratingmodels as rm
 
 import projectionmodels as pm
-import ratingmodels as rm
 from projectionmodels.integrations import actuarialpy as apx
 
 
