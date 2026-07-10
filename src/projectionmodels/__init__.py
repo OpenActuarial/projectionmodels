@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import warnings
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _package_version
 
 from .adjustments import Adjustment, Scenario
 from .assumptions import (
@@ -50,7 +52,10 @@ __all__ = [
     "new_business",
 ]
 
-__version__ = "0.6.1"
+try:
+    __version__ = _package_version("projectionmodels")
+except PackageNotFoundError:  # pragma: no cover - source tree without an install
+    __version__ = "0.0.0+unknown"
 
 # Backward-compatible access for the 0.3 advanced API.  These names are no
 # longer advertised at the package root and will move permanently to
