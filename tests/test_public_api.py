@@ -11,13 +11,17 @@ def test_package_root_is_focused_on_concrete_workflows():
     expected = {
         "Adjustment",
         "Assumption",
+        "BookProjection",
         "ClaimExperience",
         "ClaimProjection",
         "CompletionAssumption",
         "CredibilityAssumption",
         "DateCohort",
         "ExpenseProjection",
+        "GroupProjection",
+        "PMPMProjection",
         "PremiumProjection",
+        "PremiumRollforward",
         "ProjectionDates",
         "ProjectionHorizon",
         "ProjectionModelsError",
@@ -27,6 +31,7 @@ def test_package_root_is_focused_on_concrete_workflows():
         "SeasonalityAssumption",
         "TrendAssumption",
         "ValidationError",
+        "new_business",
     }
     assert set(pm.__all__) == expected
     assert "ProjectionModel" not in pm.__all__

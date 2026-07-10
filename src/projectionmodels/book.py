@@ -6,11 +6,13 @@ ratio (by group and by month). Totals use the EXPECTED (renewal-weighted) figure
 so a group contributes in proportion to how likely it is to renew.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 
-from .group import GroupProjection, GroupProjectionResult
+from .group import GroupProjection
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ class BookProjection:
         prem_m = np.zeros(len(results[0].monthly))
         clm_m = np.zeros_like(prem_m)
         months = results[0].monthly["month"].to_numpy()
-        for lab, r in zip(labels, results):
+        for lab, r in zip(labels, results, strict=True):
             rows.append({"group": lab, "premium": r.expected_premium, "claims": r.expected_claims,
                          "loss_ratio": (r.expected_claims / r.expected_premium
                                         if r.expected_premium else np.nan),

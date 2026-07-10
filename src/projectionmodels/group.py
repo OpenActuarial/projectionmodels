@@ -9,12 +9,14 @@ Renewal probability weights premium and claims equally (a lapsed group books
 neither), so the projected loss ratio is unaffected by it.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 
 from .pmpm import PMPMProjection, PMPMResult
-from .premium import PremiumRollforward, PremiumResult
+from .premium import PremiumResult, PremiumRollforward
 
 
 @dataclass(frozen=True)

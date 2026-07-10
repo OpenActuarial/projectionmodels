@@ -13,9 +13,11 @@ to turn it into projected claim dollars by month; seasonality (factors averaging
 redistributes across months without changing the annual total.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
-import numpy as np
+
 import actuarialpy as ap
+import numpy as np
 from actuarialpy import credibility_weighted_estimate
 
 

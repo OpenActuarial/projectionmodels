@@ -1,11 +1,11 @@
 """Test suite for projectionmodels."""
+import actuarialpy as ap
 import numpy as np
 import pandas as pd
 import pytest
-
-import actuarialpy as ap
-import projectionmodels as pm
 from actuarialpy import credibility_weighted_estimate as blend
+
+import projectionmodels as pm
 
 EXP_MID = pd.Timestamp("2025-07-01")
 PROSP_MID = pd.Timestamp("2027-07-01")

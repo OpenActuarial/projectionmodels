@@ -12,24 +12,32 @@ from .assumptions import (
     SeasonalityAssumption,
     TrendAssumption,
 )
+from .book import BookProjection
 from .claims import ClaimExperience, ClaimProjection
 from .data import DateCohort, ProjectionDates
 from .exceptions import ProjectionModelsError, ValidationError
 from .expenses import ExpenseProjection
+from .group import GroupProjection, new_business
 from .horizon import ProjectionHorizon
+from .pmpm import PMPMProjection
+from .premium import PremiumRollforward
 from .premiums import PremiumProjection, RenewalRateActions
 from .results import ProjectionResults
 
 __all__ = [
     "Adjustment",
     "Assumption",
+    "BookProjection",
     "ClaimExperience",
     "ClaimProjection",
     "CompletionAssumption",
     "CredibilityAssumption",
     "DateCohort",
     "ExpenseProjection",
+    "GroupProjection",
+    "PMPMProjection",
     "PremiumProjection",
+    "PremiumRollforward",
     "ProjectionDates",
     "ProjectionHorizon",
     "ProjectionModelsError",
@@ -39,6 +47,7 @@ __all__ = [
     "SeasonalityAssumption",
     "TrendAssumption",
     "ValidationError",
+    "new_business",
 ]
 
 __version__ = "0.6.1"

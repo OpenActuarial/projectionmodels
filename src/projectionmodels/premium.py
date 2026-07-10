@@ -11,7 +11,9 @@ Premium is level per member-month (it earns evenly), so `.premium(membership)`
 scales by membership with no seasonal shape -- unlike claims.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import numpy as np
 
 
