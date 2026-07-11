@@ -1,4 +1,4 @@
-"""Expenses with PMPM, fixed, percent-of-premium, and percent-of-claims bases."""
+"""Expenses on all four bases with a per-type trend — including a contractually flat fee."""
 
 from __future__ import annotations
 
@@ -10,11 +10,16 @@ import projectionmodels as pm
 def run_example() -> dict[str, object]:
     expenses = pd.DataFrame(
         {
-            "group_id": ["A", "A", "A", "A"],
-            "expense_type": ["administration", "overhead", "commission", "claim_admin"],
-            "base_value": [32.0, 5_000.0, 0.025, 0.010],
-            "basis": ["per_exposure", "fixed_monthly", "percent_premium", "percent_claims"],
-            "base_date": pd.to_datetime(["2027-01-01"] * 4),
+            "group_id": ["A"] * 5,
+            "expense_type": [
+                "administration", "network_fee", "overhead", "commission", "claim_admin",
+            ],
+            "base_value": [32.0, 6.50, 5_000.0, 0.025, 0.010],
+            "basis": [
+                "per_exposure", "per_exposure", "fixed_monthly",
+                "percent_premium", "percent_claims",
+            ],
+            "base_date": pd.to_datetime(["2027-01-01"] * 5),
         }
     )
 
@@ -49,7 +54,22 @@ def run_example() -> dict[str, object]:
         basis_col="basis",
         base_date_col="base_date",
         horizon=pm.ProjectionHorizon("2027-01-01", periods=12),
-        trend=pm.TrendAssumption.from_values("expense_trend", 0.04),
+        # Keyed by expense type: a zero-trend type is how a contractually
+        # flat fee stays flat while its neighbours trend, and the percent
+        # bases are rates, so they hold level too.
+        trend=pm.TrendAssumption.from_values(
+            "expense_trend",
+            pd.DataFrame(
+                {
+                    "expense_type": [
+                        "administration", "network_fee", "overhead",
+                        "commission", "claim_admin",
+                    ],
+                    "expense_trend": [0.04, 0.0, 0.04, 0.0, 0.0],
+                }
+            ),
+            lookup="expense_type",
+        ),
         exposure=exposure,
         exposure_col="member_months",
         premium=premium,

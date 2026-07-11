@@ -27,7 +27,20 @@ def _as_tuple(value: str | Iterable[str]) -> tuple[str, ...]:
 
 @dataclass
 class ExpenseProjection:
-    """Project expenses with per-exposure, fixed, premium, or claims bases."""
+    """Project expenses on per-exposure, fixed-monthly, percent-of-premium,
+    and percent-of-claims bases, one table for all four.
+
+    ``trend`` may be keyed by expense type, so "contractually flat" is a
+    per-type choice: a zero-trend type projects at its base value while the
+    types around it trend (see ``examples/expenses.py``). The ``claims`` and
+    ``premium`` inputs are keyed value streams joined on the projection keys
+    and period — nothing requires the claims stream to contain claims, so a
+    percentage of any per-period quantity (a claims subset such as hospital
+    claims only, or another expense run's output) is the same mechanism fed
+    a different table. Percentage bases are not multiplied by
+    ``active_fraction``: proration is already embedded in the stream they
+    reference, and prorating again would double count.
+    """
 
     expenses: pd.DataFrame
     projection_keys: tuple[str, ...] | list[str]

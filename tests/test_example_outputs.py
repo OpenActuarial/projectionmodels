@@ -45,10 +45,14 @@ def test_expense_example_includes_all_bases():
     total = output["total"]
     assert set(annual["expense_type"]) == {
         "administration",
+        "network_fee",
         "overhead",
         "commission",
         "claim_admin",
     }
+    # the contractually flat fee projects at exactly its base value
+    fee = annual.loc[annual["expense_type"] == "network_fee", "projected_expense"]
+    assert fee.item() == pytest.approx(6.50 * 1_000.0 * 12)
     assert annual["projected_expense"].gt(0).all()
     assert total["projected_expense"].item() == pytest.approx(
         annual["projected_expense"].sum()

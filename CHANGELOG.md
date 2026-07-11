@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.5] - 2026-07-11
+
+### Changed
+- `ExpenseProjection`'s docstring now states three behaviours that were
+  always true but only discoverable by reading the validation code: `trend`
+  may be keyed by expense type (a zero-trend type is a contractually flat
+  fee); the `claims`/`premium` inputs are keyed value streams, so a
+  percentage of a claims subset or of another expense run's output is the
+  same mechanism fed a different table; and percentage bases are not
+  re-prorated by `active_fraction`.
+- `examples/expenses.py` now exercises the keyed expense trend: a
+  contractually flat per-exposure network fee projects at its base value
+  while its neighbours trend, and the percent bases hold level.
+
+### Added
+- Regression test pinning the projectionmodels segments of docs Example 10
+  (`worked-example-contract.md`): contract-year loss costs, the
+  premium-independent dollar-expense levels (flat fee, trended fee,
+  percent-of-claims surcharge), and both contract pins booking to their
+  ratio given the page's solved rates.
+
 ## [0.6.4] - 2026-07-10
 
 ### Changed
