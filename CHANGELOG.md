@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.4] - 2026-07-10
+
+### Changed
+- The `actuarialpy` dependency is now an open floor (`>=0.41`) instead of a
+  capped range (`>=0.41.0,<0.45.0`). The cap made every `actuarialpy` minor
+  release a resolver conflict until a coordinated re-release here; the
+  ecosystem policy is now open floors, with the nightly ecosystem smoke
+  workflow catching runtime drift. CI keeps a pinned lane at the 0.41.0
+  floor edge.
+
 ## [0.6.3] - 2026-07-10
 
 Documentation release — no functional changes.

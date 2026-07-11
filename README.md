@@ -1,12 +1,21 @@
 # projectionmodels
 
-[![CI](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/projectionmodels)](https://pypi.org/project/projectionmodels/)
+The renewal cycle end to end: premium, claims, and expenses projected over a horizon.
 
-Focused actuarial projections of claims, premium, and expenses on supplied exposure.
+[![CI](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenActuarial/projectionmodels/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/projectionmodels)](https://pypi.org/project/projectionmodels/)
+[![Python](https://img.shields.io/pypi/pyversions/projectionmodels)](https://pypi.org/project/projectionmodels/)
 
-The package is intentionally organized around concrete workflows. Most users
-should not need to construct a calculation graph or define a custom state
-engine.
+## Overview
+
+`projectionmodels` projects premium, claims, and expenses over a monthly
+horizon on exposure you supply — by group, by claim type, and at cost levels
+that make the pipeline order (completion, then trend, then adjustments)
+explicit rather than implicit.
+
+Assumptions are first-class objects: estimate them from history with
+`actuarialpy` through the built-in adapter, or state them directly and keep
+the projection fully reproducible either way.
 
 ## Installation
 
@@ -14,55 +23,25 @@ engine.
 pip install projectionmodels
 ```
 
-`projectionmodels` currently supports `actuarialpy>=0.41,<0.45` and Python
-3.10–3.13.
+Requires Python 3.10 or newer.
 
-## Public API
-
-The package root contains the workflow objects most actuaries need:
-
-```text
-ClaimExperience        Prepare a base claim rate from experience
-ClaimProjection        Project claim rates and claims by claim type
-PremiumProjection      Roll premium forward, including renewal rate actions
-RenewalRateActions     Supply effective-dated rate actions
-ExpenseProjection      Project per-exposure, fixed, premium-based, and claim-based expenses
-ProjectionHorizon      Define monthly, quarterly, or annual projection periods
-ProjectionDates        Define entry, exit, renewal, and experience date columns
-DateCohort              Split records into existing/new or other date cohorts
-Adjustment / Scenario  Run sensitivities and alternative assumptions
-ProjectionResults      Summarize without averaging ratios or duplicating exposure
-```
-
-Lower-level modeling objects are available from `projectionmodels.advanced`,
-but they are not part of the primary workflow.
-
-## Premium at renewal
+## Quick start
 
 ```python
 import pandas as pd
 import projectionmodels as pm
 
-premium_data = pd.DataFrame(
-    {
-        "group_id": ["A", "B"],
-        "renewal_date": pd.to_datetime(["2027-03-01", "2027-07-01"]),
-        "current_premium_rate": [100.0, 100.0],
-        "rate_action": [0.10, 0.20],
-    }
-)
+premium_data = pd.DataFrame({
+    "group_id": ["A", "B"],
+    "renewal_date": pd.to_datetime(["2027-03-01", "2027-07-01"]),
+    "current_premium_rate": [100.0, 100.0],
+    "rate_action": [0.10, 0.20],
+})
 
 periods = pd.period_range("2027-01", periods=12, freq="M").astype(str)
 exposure = pd.DataFrame(
-    [
-        {
-            "group_id": group_id,
-            "projection_period": period,
-            "member_months": 1_000.0,
-        }
-        for group_id in ("A", "B")
-        for period in periods
-    ]
+    {"group_id": g, "projection_period": p, "member_months": 1_000.0}
+    for g in ("A", "B") for p in periods
 )
 
 results = pm.PremiumProjection(
@@ -73,210 +52,64 @@ results = pm.PremiumProjection(
     horizon=pm.ProjectionHorizon("2027-01-01", periods=12),
     recurring_rate_action_col="rate_action",
 ).project()
+
+print(results.to_frame().head())
 ```
 
-Group A remains at $100 through February, increases to $110 in March, and
-carries that rate forward. Group B increases to $120 in July.
+## What's inside
 
-For different actions at different renewals, provide an effective-dated table:
+- **Premium** — renewal-date-aware rate projection with recurring rate
+  actions.
+- **Claims** — projection by claim type with explicit cost levels and
+  pipeline order (complete, trend, adjust).
+- **Expenses** — fixed and variable expense projection alongside the claim
+  stream.
+- **Assumptions** — assumption objects estimated from history via the
+  `actuarialpy` adapter or supplied directly.
+- **Book and group** — the same machinery at single-group and whole-book
+  level, with results tables by period, group, and component.
+- **Advanced** — extension points for custom models and integrations.
 
-```python
-actions = pm.RenewalRateActions(
-    pd.DataFrame(
-        {
-            "group_id": ["A", "A", "B"],
-            "effective_date": pd.to_datetime(
-                ["2027-03-01", "2028-03-01", "2027-07-01"]
-            ),
-            "rate_action": [0.10, 0.06, 0.20],
-        }
-    ),
-    projection_keys=["group_id"],
-)
+The full API reference and end-to-end worked examples live at
+**[openactuarial.org/projectionmodels.html](https://openactuarial.org/projectionmodels.html)**.
+
+## The OpenActuarial ecosystem
+
+`projectionmodels` is one of seven packages that share conventions — tidy tables,
+explicit distribution parameterizations, reproducible random-number handling —
+and compose across package seams:
+
+| Package | Role |
+|---|---|
+| [actuarialpy](https://github.com/OpenActuarial/actuarialpy) | Calculation primitives the workflow packages build on |
+| [experiencestudies](https://github.com/OpenActuarial/experiencestudies) | Experience reporting, actual-vs-expected, claimant and concentration analysis |
+| **[projectionmodels](https://github.com/OpenActuarial/projectionmodels)** | Claim, premium, and expense projection over a renewal horizon |
+| [ratingmodels](https://github.com/OpenActuarial/ratingmodels) | Manual and experience rating, credibility, indication, GLM relativities |
+| [lossmodels](https://github.com/OpenActuarial/lossmodels) | Severity and frequency fitting, aggregate loss distributions |
+| [extremeloss](https://github.com/OpenActuarial/extremeloss) | Extreme-value tails: POT/GPD, GEV, return levels, splicing |
+| [risksim](https://github.com/OpenActuarial/risksim) | Portfolio Monte Carlo, dependence, reinsurance contracts, risk measures |
+
+Install everything at once with `pip install openactuarial`.
+
+## Development
+
+```bash
+git clone https://github.com/OpenActuarial/projectionmodels
+cd projectionmodels
+python -m pip install -e ".[dev]"
+pytest
+ruff check src tests
 ```
 
-## Claims by claim type
+CI runs the same gate on Python 3.10–3.14 across Linux and Windows.
 
-```python
-experience = pm.ClaimExperience(
-    claims,
-    projection_keys=["group_id", "product_id"],
-    claim_type_col="claim_type",
-    date_col="incurred_month",
-    claims_col="reported_claims",
-    exposure_col="member_months",
-    valuation_date="2026-12-31",
-)
+## Versioning and stability
 
-projection = pm.ClaimProjection.from_experience(
-    experience,
-    exposure=exposure,
-    exposure_col="member_months",
-    horizon=pm.ProjectionHorizon("2027-01-01", periods=36),
-    completion=completion,
-    trend=trend,
-    seasonality=seasonality,
-    credibility=credibility,
-    complement=manual_rates,
-)
+All ecosystem packages are pre-1.0: minor releases may change APIs, and every
+release is documented in [CHANGELOG.md](CHANGELOG.md). Current per-package API
+stability is tracked at
+[openactuarial.org/stability.html](https://openactuarial.org/stability.html).
 
-results = projection.project()
-```
+## License
 
-Trend, seasonality, completion, and credibility may be supplied directly as
-assumption tables.
-
-### Cost levels and pipeline order
-
-The claim workflow evaluates, in order: complete → deseasonalize → trend the
-experience rate to the blend basis → credibility blend → trend from the basis
-to each projection period → reseasonalize → add `rate_loads` → multiply by
-exposure. Exposure is whatever unit the book uses — member-months,
-policy months, car-years — named with `exposure_col`.
-
-The complement is used **as stated**. By default the blend basis is the
-prospective midpoint of the horizon (`complement_basis="prospective"`), the
-level at which manual and book rates are conventionally quoted — so a
-zero-credibility projection reproduces the complement rather than a trended
-copy of it. Set `complement_basis="experience"` if your complement is quoted
-at experience-period cost level, or pass an explicit as-of date. Because the
-month arithmetic is exactly additive, results at full credibility are
-identical under every basis.
-
-`rate_loads` (for example a pooling charge) are added to the projected rate
-as stated: flat across periods, after seasonality, outside the blend.
-
-## Estimating assumptions with actuarialpy
-
-Estimation is explicit and separate from projection execution:
-
-```python
-from projectionmodels.integrations.actuarialpy import (
-    estimate_completion,
-    estimate_credibility,
-    estimate_seasonality,
-    estimate_trend,
-)
-
-completion = estimate_completion(
-    "claim_completion",
-    payment_history,
-    by=["claim_type"],
-    origin_col="incurred_month",
-    valuation_col="paid_month",
-    amount_col="paid_claims",
-)
-
-seasonality = estimate_seasonality(
-    "claim_seasonality",
-    completed_history,
-    by=["claim_type"],
-    date_col="incurred_month",
-    value_col="completed_claims",
-    exposure_col="member_months",
-)
-
-trend = estimate_trend(
-    "claim_trend",
-    deseasonalized_history,
-    by=["claim_type"],
-    date_col="incurred_month",
-    value_col="deseasonalized_claims",
-    exposure_col="member_months",
-)
-
-credibility = estimate_credibility(
-    "claim_credibility",
-    experience_history,
-    method="limited_fluctuation",
-    by=["group_id", "claim_type"],
-    exposure_col="claim_count",
-    full_credibility_standard=2_000,
-)
-```
-
-The returned assumptions retain indicated values and diagnostics. An actuary can
-replace the indication while preserving the audit trail:
-
-```python
-selected_trend = trend.select(selected_table, note="2027 pricing selection")
-```
-
-## Expenses
-
-`ExpenseProjection` supports:
-
-- `per_exposure`
-- `fixed_monthly`
-- `percent_premium`
-- `percent_claims`
-
-Each expense type may have its own trend and projection component.
-
-## Date handling
-
-`ProjectionDates` supports entry, exit, renewal, issue, and experience dates.
-Records can be inactive before entry or after exit, and exposure can be whole-
-period or daily-prorated.
-
-`DateCohort` adds reportable classifications such as existing versus new
-business:
-
-```python
-records = pm.DateCohort(
-    "business_origin",
-    "effective_date",
-    split_date="2027-01-01",
-    before_label="existing",
-    on_or_after_label="new_business",
-).apply(records)
-```
-
-## Results
-
-```python
-summary = results.summarize(
-    by=["scenario", "product_id", "calendar_year"],
-    measures=["member_months", "premium", "projected_claims", "claims_per_exposure"],
-)
-```
-
-`ProjectionResults` retains measure grain. It counts exposure once when claim
-type is removed from a summary and recalculates per-exposure rates and loss ratios from their
-summed numerators and denominators.
-
-## Advanced models
-
-Custom deterministic roll-forwards remain available, but are deliberately moved
-out of the primary namespace:
-
-```python
-import projectionmodels.advanced as pma
-
-model = pma.ProjectionModel(...)
-```
-
-Use this only when the claim, premium, and expense workflows are insufficient.
-The advanced API remains provisional while the concrete workflows stabilize.
-
-## Examples
-
-Primary examples:
-
-```text
-examples/health_claims.py
-examples/pooled_claims.py
-examples/calculated_assumptions.py
-examples/renewal_rate_actions.py
-examples/date_cohorts.py
-examples/expenses.py
-examples/underwriting_results.py
-```
-
-Custom-engine examples are under `examples/advanced/`.
-
-## Testing
-
-The test suite imports the installed `actuarialpy`; it does not replace it with a
-session-wide fake. CI runs the tests, every example, package builds, and a clean
-wheel-install smoke test.
+MIT — see [LICENSE](LICENSE).

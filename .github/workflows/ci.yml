@@ -9,75 +9,20 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        # "latest-allowed" leaves actuarialpy at whatever pip resolves inside
-        # the range declared in pyproject.toml, so these lanes can never go
-        # stale when the pin moves.
-        actuarialpy-version: ["latest-allowed"]
-        include:
-          # Pinned edges of the actuarialpy range declared in pyproject.toml.
-          # When the bounds move, move these two entries with them.
-          - os: ubuntu-latest
-            python-version: "3.10"
-            actuarialpy-version: "0.41.0"
-          - os: ubuntu-latest
-            python-version: "3.13"
-            actuarialpy-version: "0.44.0"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-      - run: python -m pip install --upgrade pip
-      # Install from the declared dependency set. The tests import the real
-      # actuarialpy package; no session-wide fake or stub is used.
-      - run: python -m pip install -e ".[dev]"
-      - name: Pin actuarialpy to a range edge
-        if: matrix.actuarialpy-version != 'latest-allowed'
-        run: python -m pip install "actuarialpy==${{ matrix.actuarialpy-version }}"
-      - run: python -c "import actuarialpy; print('actuarialpy', actuarialpy.__version__, actuarialpy.__file__)"
-      - run: ruff check src tests examples
-      - run: pytest --cov=projectionmodels --cov-report=term-missing --cov-fail-under=95
-      - name: Run every documented example against installed dependencies
-        shell: bash
-        run: |
-          while IFS= read -r example; do
-            echo "Running ${example}"
-            python "${example}" >/dev/null
-          done < <(find examples -name "*.py" -type f | sort)
-      - run: python -m build
+  ci:
+    uses: OpenActuarial/.github/.github/workflows/reusable-ci.yml@main
+    with:
+      package: projectionmodels
+      coverage-min: 95
 
-  clean-wheel-install:
+  # Package-specific lane: the declared actuarialpy floor must stay true.
+  actuarialpy-floor:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade pip build
-      - run: python -m build
-      - run: python -m venv /tmp/projectionmodels-clean
-      - run: /tmp/projectionmodels-clean/bin/python -m pip install dist/*.whl
-      - name: Smoke test the installed wheel
-        run: |
-          /tmp/projectionmodels-clean/bin/python - <<'PY'
-          import importlib.metadata
-          import pathlib
-          import tomllib
-
-          import actuarialpy
-          import projectionmodels as pm
-
-          expected = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
-          assert pm.__version__ == expected, (pm.__version__, expected)
-          assert importlib.metadata.version("projectionmodels") == expected
-          assert len(pm.ProjectionHorizon("2027-01-01", periods=2)) == 2
-          print(f"clean wheel install passed: projectionmodels {expected} (actuarialpy {actuarialpy.__version__})")
-          PY
+          python-version: "3.10"
+      - run: python -m pip install -e ".[dev]" && python -m pip install "actuarialpy==0.41.0"
+      - run: python -c "import actuarialpy; print('actuarialpy', actuarialpy.__version__)"
+      - run: pytest
