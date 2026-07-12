@@ -15,7 +15,7 @@ from .assumptions import (
     TrendAssumption,
 )
 from .book import BookProjection
-from .claims import ClaimExperience, ClaimProjection
+from .claims import ClaimProjection, base_rates, prepare_experience, project
 from .data import DateCohort, ProjectionDates
 from .exceptions import ProjectionModelsError, ValidationError
 from .expenses import ExpenseProjection
@@ -30,7 +30,9 @@ __all__ = [
     "Adjustment",
     "Assumption",
     "BookProjection",
-    "ClaimExperience",
+    "base_rates",
+    "prepare_experience",
+    "project",
     "ClaimProjection",
     "CompletionAssumption",
     "CredibilityAssumption",

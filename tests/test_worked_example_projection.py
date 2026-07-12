@@ -8,6 +8,7 @@ suite; the issued actions cross over here as constants.
 import numpy as np
 import pandas as pd
 import pytest
+from actuarialpy import Experience
 
 import projectionmodels as pm
 from projectionmodels.integrations import actuarialpy as apx
@@ -92,16 +93,16 @@ def test_renewal_cycle_page_numbers():
     exposure = pd.DataFrame(
         [{"group_id": g, "projection_period": p, "member_months": mm}
          for g, mm in (("A", 5000.0), ("B", 700.0)) for p in periods])
-    experience = pm.ClaimExperience(
-        hist, projection_keys=["group_id"], claim_type_col="claim_type",
-        date_col="incurred_month", claims_col="reported_claims",
-        exposure_col="member_months", valuation_date=valuation)
+    experience = Experience(
+        hist, expense="reported_claims", exposure="member_months",
+        date="incurred_month", dimensions=["group_id", "claim_type"],
+        valuation_date=valuation)
     manual = pm.Assumption(
         "manual_claim_rate",
         pd.DataFrame({"claim_type": ["inpatient", "outpatient"],
                       "manual_claim_rate": [215.0, 335.0]}),
         lookup=["claim_type"], value_col="manual_claim_rate")
-    projection = pm.ClaimProjection.from_experience(
+    projection = pm.project(
         experience, exposure=exposure, exposure_col="member_months",
         horizon=horizon, completion=completion, seasonality=seasonality,
         trend=trend, credibility=credibility, complement=manual,

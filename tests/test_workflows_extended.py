@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from actuarialpy import Experience
 
 from projectionmodels import (
-    ClaimExperience,
     ClaimProjection,
     CompletionAssumption,
     CredibilityAssumption,
@@ -13,6 +13,9 @@ from projectionmodels import (
     ProjectionHorizon,
     TrendAssumption,
     ValidationError,
+    base_rates,
+    prepare_experience,
+    project,
 )
 
 
@@ -30,59 +33,55 @@ def claim_history() -> pd.DataFrame:
 
 
 def test_claim_experience_prepare_without_optional_adjustments():
-    experience = ClaimExperience(
+    experience = Experience(
         claim_history(),
-        projection_keys=["group"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group", "claim_type"],
     )
-    prepared = experience.prepare()
+    prepared = prepare_experience(experience)
     assert prepared["claims_completed"].tolist() == [100.0, 120.0]
     assert prepared["claims_completed_deseasonalized"].tolist() == [100.0, 120.0]
 
 
 
 def test_claim_experience_midpoint_preserves_datetime_units():
-    experience = ClaimExperience(
+    experience = Experience(
         claim_history(),
-        projection_keys=["group"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group", "claim_type"],
     )
-    rates = experience.to_base_rates()
+    rates = base_rates(experience)
     midpoint = rates["experience_midpoint"].item()
     assert pd.Timestamp("2026-01-01") <= midpoint <= pd.Timestamp("2026-02-01")
 
 def test_claim_completion_without_development_requires_valuation_date():
-    experience = ClaimExperience(
+    experience = Experience(
         claim_history(),
-        projection_keys=["group"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group", "claim_type"],
     )
     completion = CompletionAssumption.from_values(
         "completion", pd.Series([0.5], index=pd.Index([0], name="development_month"))
     )
     with pytest.raises(ValidationError, match="valuation_date"):
-        experience.prepare(completion=completion)
+        prepare_experience(experience, completion=completion)
 
 
 def test_claim_base_rates_extra_columns_and_scalar_complement():
-    experience = ClaimExperience(
+    experience = Experience(
         claim_history(),
-        projection_keys=["group"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group", "claim_type"],
     )
-    rates = experience.to_base_rates(extra_record_cols=["region"], complement=8.0)
+    rates = base_rates(experience, extra_record_cols=["region"], complement=8.0)
     assert rates["region"].item() == "west"
     assert rates["experience_claim_rate"].item() == pytest.approx(11.0)
     assert rates["complement_claim_rate"].item() == 8.0
@@ -91,33 +90,31 @@ def test_claim_base_rates_extra_columns_and_scalar_complement():
 def test_claim_base_rates_reject_variable_extra_columns_and_invalid_complement():
     history = claim_history()
     history["region"] = ["west", "east"]
-    experience = ClaimExperience(
+    experience = Experience(
         history,
-        projection_keys=["group"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group", "claim_type"],
     )
     with pytest.raises(ValidationError, match="not constant"):
-        experience.to_base_rates(extra_record_cols=["region"])
+        base_rates(experience, extra_record_cols=["region"])
     with pytest.raises(ValidationError, match="complement must be"):
-        experience.to_base_rates(complement=pd.DataFrame({"rate": [1.0]}))
+        base_rates(experience, complement=pd.DataFrame({"rate": [1.0]}))
 
 
 def test_claim_projection_without_credibility_uses_experience_rate():
-    experience = ClaimExperience(
+    experience = Experience(
         claim_history(),
-        projection_keys=["group"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group", "claim_type"],
     )
     exposure = pd.DataFrame(
         {"group": ["A"], "projection_period": ["2027-01"], "exposure": [10.0]}
     )
-    projection = ClaimProjection.from_experience(
+    projection = project(
         experience,
         exposure=exposure,
         horizon=ProjectionHorizon("2027-01-01", periods=1),

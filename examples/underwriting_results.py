@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+from actuarialpy import Experience
 
 import projectionmodels as pm
 
@@ -85,15 +86,14 @@ def run_example() -> dict[str, object]:
         measures=["member_months", "premium"],
     )
 
-    experience = pm.ClaimExperience(
+    experience = Experience(
         _claim_history(),
-        projection_keys=["group_id", "product_id"],
-        claim_type_col="claim_type",
-        date_col="incurred_month",
-        claims_col="reported_claims",
-        exposure_col="member_months",
+        expense="reported_claims",
+        exposure="member_months",
+        date="incurred_month",
+        dimensions=["group_id", "product_id", "claim_type"],
     )
-    claim_projection = pm.ClaimProjection.from_experience(
+    claim_projection = pm.project(
         experience,
         exposure=exposure,
         exposure_col="member_months",

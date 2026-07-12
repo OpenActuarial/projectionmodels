@@ -1,7 +1,7 @@
 """Large-claim pooling composed ahead of the claim workflow.
 
 Recipe: pool claim-level detail at the pooling point with
-``actuarialpy.pool_losses`` *before* building ``ClaimExperience``, so a
+``actuarialpy.pool_losses`` *before* building the ``Experience``, so a
 handful of catastrophic claims cannot distort the group's experience rate.
 Aggregate the retained claims into incurred-month experience, run the
 standard ``ClaimProjection`` on the retained basis, and add the pooling
@@ -24,6 +24,7 @@ from __future__ import annotations
 import actuarialpy as ap
 import numpy as np
 import pandas as pd
+from actuarialpy import Experience
 
 import projectionmodels as pm
 
@@ -100,17 +101,17 @@ def run_example() -> dict[str, object]:
 
     # 3. Base rates from the retained experience; complement quoted at
     #    prospective level and used as stated.
-    experience = pm.ClaimExperience(
-        data=retained_experience,
-        projection_keys=["group_id"],
-        claim_type_col="claim_type",
-        date_col="incurred_month",
-        claims_col="reported_claims",
-        exposure_col="member_months",
+    experience = Experience(
+        retained_experience,
+        expense="reported_claims",
+        exposure="member_months",
+        date="incurred_month",
+        dimensions=["group_id", "claim_type"],
         valuation_date="2026-12-31",
     )
-    base_rates = experience.to_base_rates(
-        complement=pm.Assumption("manual_claim_rate", 320.0)
+    base_rates = pm.base_rates(
+        experience,
+        complement=pm.Assumption("manual_claim_rate", 320.0),
     )
 
     # 4. Project CY2027 with the pooling charge as a flat rate load, and once

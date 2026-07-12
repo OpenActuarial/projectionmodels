@@ -1,14 +1,15 @@
 import pandas as pd
 import pytest
+from actuarialpy import Experience
 
 from projectionmodels import (
     Assumption,
-    ClaimExperience,
     ClaimProjection,
     CredibilityAssumption,
     ProjectionHorizon,
     SeasonalityAssumption,
     TrendAssumption,
+    project,
 )
 
 
@@ -23,13 +24,12 @@ def test_claim_experience_and_projection_by_claim_type():
             "exposure": [100.0, 100.0, 100.0, 100.0],
         }
     )
-    experience = ClaimExperience(
+    experience = Experience(
         history,
-        projection_keys=["group_id", "product_id"],
-        claim_type_col="claim_type",
-        date_col="month",
-        claims_col="claims",
-        exposure_col="exposure",
+        expense="claims",
+        exposure="exposure",
+        date="month",
+        dimensions=["group_id", "product_id", "claim_type"],
     )
     seasonality_values = pd.DataFrame(
         {
@@ -70,7 +70,7 @@ def test_claim_experience_and_projection_by_claim_type():
             "exposure": [100.0, 100.0],
         }
     )
-    projection = ClaimProjection.from_experience(
+    projection = project(
         experience,
         exposure=exposure,
         horizon=ProjectionHorizon("2027-01-01", periods=2),

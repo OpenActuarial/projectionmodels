@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "projectionmodels"
-version = "0.6.5"
+version = "0.7.0"
 description = "Focused actuarial claim, premium, membership, and expense projections."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,7 +38,7 @@ classifiers = [
 dependencies = [
   "numpy>=1.23",
   "pandas>=1.5",
-  "actuarialpy>=0.41",
+  "actuarialpy>=0.45",
 ]
 
 [project.optional-dependencies]

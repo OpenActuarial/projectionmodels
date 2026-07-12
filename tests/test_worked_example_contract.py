@@ -11,6 +11,7 @@ margin of both pins.
 import numpy as np
 import pandas as pd
 import pytest
+from actuarialpy import Experience
 
 import projectionmodels as pm
 
@@ -36,16 +37,16 @@ def _claims():
             for ct, base, tr in (("inpatient", 260.0, 0.075),
                                  ("outpatient", 190.0, 0.060))
             for i, m in enumerate(months)]
-    experience = pm.ClaimExperience(
-        pd.DataFrame(rows), projection_keys=KEYS, claim_type_col="claim_type",
-        date_col="incurred_month", claims_col="reported_claims",
-        exposure_col="member_months")
+    experience = Experience(
+        pd.DataFrame(rows), expense="reported_claims",
+        exposure="member_months", date="incurred_month",
+        dimensions=[*KEYS, "claim_type"])
     trend = pm.TrendAssumption.from_values(
         "claim_trend",
         pd.DataFrame({"claim_type": ["inpatient", "outpatient"],
                       "annual_trend": [0.075, 0.060]}),
         lookup=["claim_type"], rate_col="annual_trend")
-    claims = pm.ClaimProjection.from_experience(
+    claims = pm.project(
         experience, exposure=EXPOSURE, exposure_col="member_months",
         horizon=HORIZON, trend=trend,
     ).project().summarize(by=["group_id", "projection_period"],

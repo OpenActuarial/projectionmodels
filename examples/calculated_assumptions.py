@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from actuarialpy import Experience
 
 import projectionmodels as pm
 from projectionmodels.integrations import actuarialpy as apx
@@ -114,13 +115,12 @@ def run_example() -> dict[str, object]:
         full_credibility_standard=2_000.0,
     )
 
-    experience = pm.ClaimExperience(
+    experience = Experience(
         history,
-        projection_keys=["group_id", "product_id"],
-        claim_type_col="claim_type",
-        date_col="incurred_month",
-        claims_col="reported_claims",
-        exposure_col="member_months",
+        expense="reported_claims",
+        exposure="member_months",
+        date="incurred_month",
+        dimensions=["group_id", "product_id", "claim_type"],
         valuation_date=valuation_date,
     )
     complement = pm.Assumption(
@@ -143,7 +143,7 @@ def run_example() -> dict[str, object]:
         }
     )
 
-    projection = pm.ClaimProjection.from_experience(
+    projection = pm.project(
         experience,
         exposure=exposure,
         exposure_col="member_months",

@@ -12,12 +12,14 @@ the complement rather than a trended copy of it.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from actuarialpy import Experience, resolve_date, single_role, single_role_or_none
 
 from .actuarialpy_adapter import actuarialpy_function
 from .adjustments import Scenario
@@ -80,178 +82,223 @@ def _months_between(base: Any, target: Any, index: pd.Index) -> pd.Series:
     )
 
 
-@dataclass(frozen=True)
-class ClaimExperience:
-    """Historical claims used to establish projected base rates.
+def _coerce_completion(value):
+    if value is None or isinstance(value, CompletionAssumption):
+        return value
+    if isinstance(value, (pd.Series, dict)):
+        series = pd.Series(value)
+        if series.index.name is None:
+            series.index.name = "development_month"
+        return CompletionAssumption.from_values("completion", series)
+    raise ValidationError(
+        "completion must be a CompletionAssumption, or a Series/mapping of "
+        "completion factors keyed by development month"
+    )
 
-    The input may contain one row per month, claim transaction, or another
-    experience grain. ``to_base_rates`` develops immature claims, removes
-    seasonality, aggregates to projection record + claim type, and calculates a
-    per-exposure experience rate.
+
+def _coerce_seasonality(value):
+    if value is None or isinstance(value, SeasonalityAssumption):
+        return value
+    if isinstance(value, (pd.Series, dict)):
+        series = pd.Series(value)
+        table = pd.DataFrame({"season": series.index, "factor": series.to_numpy()})
+        return SeasonalityAssumption.from_values("seasonality", table, factor_col="factor")
+    raise ValidationError(
+        "seasonality must be a SeasonalityAssumption, or a Series/mapping of "
+        "factors keyed by season; use the assumption object for keyed tables"
+    )
+
+
+def _coerce_trend(value):
+    if value is None or isinstance(value, TrendAssumption):
+        return value
+    if np.isscalar(value) or isinstance(value, (pd.Series, dict)):
+        return TrendAssumption.from_values("claim_trend", value)
+    raise ValidationError(
+        "trend must be a TrendAssumption, a scalar annual rate, or a "
+        "Series/mapping of rates; use the assumption object for keyed tables"
+    )
+
+
+def _coerce_credibility(value):
+    if value is None or isinstance(value, CredibilityAssumption):
+        return value
+    if np.isscalar(value) or isinstance(value, (pd.Series, dict)):
+        return CredibilityAssumption.from_weights("credibility", value)
+    raise ValidationError(
+        "credibility must be a CredibilityAssumption, a scalar weight, or a "
+        "Series/mapping of weights; use the assumption object for keyed tables"
+    )
+
+
+def prepare_experience(
+    exp: Experience,
+    *,
+    completion: CompletionAssumption | None = None,
+    seasonality: SeasonalityAssumption | None = None,
+    claims_col: str | None = None,
+) -> pd.DataFrame:
+    """Return experience with completed and deseasonalized claim columns.
+
+    Takes the canonical :class:`actuarialpy.Experience` -- the bound expense,
+    date, and exposure roles and the object's ``valuation_date`` fill the
+    column plumbing -- and applies the projection assumptions in pipeline
+    order (completion, then seasonality). The working column is carried to
+    ``projectionmodels_adjusted_claims`` for :func:`base_rates`.
     """
+    completion = _coerce_completion(completion)
+    seasonality = _coerce_seasonality(seasonality)
+    claims_col = claims_col if claims_col is not None else single_role(exp.expense, "expense")
+    date_col = resolve_date(exp)
+    valuation_date = exp.valuation_date
 
-    data: pd.DataFrame
-    projection_keys: tuple[str, ...] | list[str]
-    claim_type_col: str
-    date_col: str
-    claims_col: str
-    exposure_col: str
-    valuation_date: Any | None = None
+    work = exp.data.copy()
+    work[date_col] = pd.to_datetime(work[date_col])
+    working_col = claims_col
 
-    def __post_init__(self) -> None:
-        keys = _as_tuple(self.projection_keys)
-        object.__setattr__(self, "projection_keys", keys)
-        required = [
-            *keys,
-            self.claim_type_col,
-            self.date_col,
-            self.claims_col,
-            self.exposure_col,
+    if completion is not None:
+        if valuation_date is None and completion.development_col not in work.columns:
+            raise ValidationError(
+                "valuation_date is required to apply completion without a development column"
+            )
+        by = [
+            column
+            for column in completion.lookup
+            if column != completion.development_col
         ]
-        missing = [column for column in required if column not in self.data.columns]
-        if missing:
-            raise ValidationError(f"claim experience is missing columns: {missing}")
+        out_col = f"{claims_col}_completed"
+        work = completion.apply(
+            work,
+            value_col=claims_col,
+            date_col=(
+                None if completion.development_col in work.columns else date_col
+            ),
+            valuation_date=valuation_date,
+            development_col=(
+                completion.development_col
+                if completion.development_col in work.columns
+                else None
+            ),
+            by=by or None,
+            out_col=out_col,
+        )
+        working_col = out_col
+    else:
+        work[f"{claims_col}_completed"] = work[claims_col]
+        working_col = f"{claims_col}_completed"
 
-    @property
-    def record_keys(self) -> tuple[str, ...]:
-        return self.projection_keys + (self.claim_type_col,)
+    if seasonality is not None:
+        deseasonalize = actuarialpy_function("deseasonalize")
+        by = [
+            column
+            for column in seasonality.lookup
+            if column != seasonality.season_col
+        ]
+        out_col = f"{working_col}_deseasonalized"
+        work = deseasonalize(
+            work,
+            seasonality.values,
+            date_col=date_col,
+            value_col=working_col,
+            freq=seasonality.frequency,
+            by=by or None,
+            factor_col=seasonality.value_col or seasonality.name,
+            season_name=seasonality.season_col,
+            out_col=out_col,
+        )
+        working_col = out_col
+    else:
+        work[f"{working_col}_deseasonalized"] = work[working_col]
+        working_col = f"{working_col}_deseasonalized"
 
-    def prepare(
-        self,
-        *,
-        completion: CompletionAssumption | None = None,
-        seasonality: SeasonalityAssumption | None = None,
-    ) -> pd.DataFrame:
-        """Return experience with completed and deseasonalized claim columns."""
+    work["projectionmodels_adjusted_claims"] = work[working_col]
+    return work
 
-        work = self.data.copy()
-        work[self.date_col] = pd.to_datetime(work[self.date_col])
-        working_col = self.claims_col
 
-        if completion is not None:
-            if self.valuation_date is None and completion.development_col not in work.columns:
-                raise ValidationError(
-                    "valuation_date is required to apply completion without a development column"
-                )
-            by = [
-                column
-                for column in completion.lookup
-                if column != completion.development_col
-            ]
-            out_col = f"{self.claims_col}_completed"
-            work = completion.apply(
-                work,
-                value_col=self.claims_col,
-                date_col=(
-                    None if completion.development_col in work.columns else self.date_col
-                ),
-                valuation_date=self.valuation_date,
-                development_col=(
-                    completion.development_col
-                    if completion.development_col in work.columns
-                    else None
-                ),
-                by=by or None,
-                out_col=out_col,
-            )
-            working_col = out_col
-        else:
-            work[f"{self.claims_col}_completed"] = work[self.claims_col]
-            working_col = f"{self.claims_col}_completed"
+def base_rates(
+    exp: Experience,
+    *,
+    grain: str | Iterable[str] | None = None,
+    completion: CompletionAssumption | None = None,
+    seasonality: SeasonalityAssumption | None = None,
+    complement: Assumption | Any | None = None,
+    extra_record_cols: Iterable[str] = (),
+    claims_col: str | None = None,
+) -> pd.DataFrame:
+    """Aggregate prepared experience to one row per projection record.
 
-        if seasonality is not None:
-            deseasonalize = actuarialpy_function("deseasonalize")
-            by = [
-                column
-                for column in seasonality.lookup
-                if column != seasonality.season_col
-            ]
-            out_col = f"{working_col}_deseasonalized"
-            work = deseasonalize(
-                work,
-                seasonality.values,
-                date_col=self.date_col,
-                value_col=working_col,
-                freq=seasonality.frequency,
-                by=by or None,
-                factor_col=seasonality.value_col or seasonality.name,
-                season_name=seasonality.season_col,
-                out_col=out_col,
-            )
-            working_col = out_col
-        else:
-            work[f"{working_col}_deseasonalized"] = work[working_col]
-            working_col = f"{working_col}_deseasonalized"
+    ``grain`` names the record columns (projection keys plus the claim-type
+    dimension) and defaults to the ``dimensions`` bound on the Experience.
+    Produces ``experience_claim_rate``, the exposure-weighted
+    ``experience_midpoint``, and -- when given -- ``complement_claim_rate``:
+    the columns :class:`ClaimProjection` consumes.
+    """
+    grain_cols = list(_as_tuple(grain)) if grain is not None else list(exp.dimensions)
+    if not grain_cols:
+        raise ValidationError(
+            "no record grain: bind dimensions=... on the Experience or pass grain=[...]"
+        )
+    exposure_col = single_role(exp.exposure, "exposure")
+    date_col = resolve_date(exp)
 
-        work["projectionmodels_adjusted_claims"] = work[working_col]
-        return work
-
-    def to_base_rates(
-        self,
-        *,
-        completion: CompletionAssumption | None = None,
-        seasonality: SeasonalityAssumption | None = None,
-        complement: Assumption | Any | None = None,
-        extra_record_cols: Iterable[str] = (),
-    ) -> pd.DataFrame:
-        """Aggregate prepared experience to one row per record and claim type."""
-
-        work = self.prepare(completion=completion, seasonality=seasonality)
-        group_columns = list(self.record_keys)
-        extra = list(extra_record_cols)
-        for column in extra:
-            if column not in work.columns:
-                raise ValidationError(f"extra record column {column!r} is missing")
-            variation = work.groupby(group_columns, dropna=False)[column].nunique(
-                dropna=False
-            )
-            if (variation > 1).any():
-                raise ValidationError(
-                    f"extra record column {column!r} is not constant within a projection record"
-                )
-
-        grouped = work.groupby(group_columns, dropna=False, sort=False)
-        output = grouped.agg(
-            adjusted_claims=("projectionmodels_adjusted_claims", "sum"),
-            experience_exposure=(self.exposure_col, "sum"),
-        ).reset_index()
-        for column in extra:
-            output = output.merge(
-                grouped[column].first().rename(column).reset_index(),
-                on=group_columns,
-                how="left",
-                validate="one_to_one",
+    work = prepare_experience(
+        exp, completion=completion, seasonality=seasonality, claims_col=claims_col
+    )
+    group_columns = grain_cols
+    extra = list(extra_record_cols)
+    for column in extra:
+        if column not in work.columns:
+            raise ValidationError(f"extra record column {column!r} is missing")
+        variation = work.groupby(group_columns, dropna=False)[column].nunique(
+            dropna=False
+        )
+        if (variation > 1).any():
+            raise ValidationError(
+                f"extra record column {column!r} is not constant within a projection record"
             )
 
-        midpoints = []
-        for key, part in grouped:
-            key_tuple = key if isinstance(key, tuple) else (key,)
-            row = dict(zip(group_columns, key_tuple, strict=True))
-            row["experience_midpoint"] = _weighted_midpoint(
-                part[self.date_col], part[self.exposure_col]
-            )
-            midpoints.append(row)
+    grouped = work.groupby(group_columns, dropna=False, sort=False)
+    output = grouped.agg(
+        adjusted_claims=("projectionmodels_adjusted_claims", "sum"),
+        experience_exposure=(exposure_col, "sum"),
+    ).reset_index()
+    for column in extra:
         output = output.merge(
-            pd.DataFrame(midpoints),
+            grouped[column].first().rename(column).reset_index(),
             on=group_columns,
             how="left",
             validate="one_to_one",
         )
-        per_exposure = actuarialpy_function("per_exposure")
-        output["experience_claim_rate"] = per_exposure(
-            output["adjusted_claims"], output["experience_exposure"]
-        )
 
-        if complement is not None:
-            if isinstance(complement, Assumption):
-                output["complement_claim_rate"] = complement.resolve(output)
-            elif np.isscalar(complement):
-                output["complement_claim_rate"] = complement
-            else:
-                raise ValidationError(
-                    "complement must be an Assumption or scalar; use Assumption for keyed tables"
-                )
-        return output
+    midpoints = []
+    for key, part in grouped:
+        key_tuple = key if isinstance(key, tuple) else (key,)
+        row = dict(zip(group_columns, key_tuple, strict=True))
+        row["experience_midpoint"] = _weighted_midpoint(
+            part[date_col], part[exposure_col]
+        )
+        midpoints.append(row)
+    output = output.merge(
+        pd.DataFrame(midpoints),
+        on=group_columns,
+        how="left",
+        validate="one_to_one",
+    )
+    per_exposure = actuarialpy_function("per_exposure")
+    output["experience_claim_rate"] = per_exposure(
+        output["adjusted_claims"], output["experience_exposure"]
+    )
+
+    if complement is not None:
+        if isinstance(complement, Assumption):
+            output["complement_claim_rate"] = complement.resolve(output)
+        elif np.isscalar(complement):
+            output["complement_claim_rate"] = complement
+        else:
+            raise ValidationError(
+                "complement must be an Assumption or scalar; use Assumption for keyed tables"
+            )
+    return output
 
 
 @dataclass
@@ -361,47 +408,6 @@ class ClaimProjection:
                     "rate_loads entries must be Assumption objects or scalars"
                 )
         self.rate_loads = tuple(loads)
-
-    @classmethod
-    def from_experience(
-        cls,
-        experience: ClaimExperience,
-        *,
-        exposure: pd.DataFrame,
-        horizon: ProjectionHorizon,
-        trend: TrendAssumption,
-        seasonality: SeasonalityAssumption | None = None,
-        credibility: CredibilityAssumption | None = None,
-        completion: CompletionAssumption | None = None,
-        complement: Assumption | Any | None = None,
-        complement_basis: str | pd.Timestamp = "prospective",
-        rate_loads: Any = (),
-        extra_record_cols: Iterable[str] = (),
-        exposure_col: str = "exposure",
-        exposure_period_col: str = "projection_period",
-        dates: ProjectionDates | None = None,
-    ) -> ClaimProjection:
-        base_rates = experience.to_base_rates(
-            completion=completion,
-            seasonality=seasonality,
-            complement=complement,
-            extra_record_cols=extra_record_cols,
-        )
-        return cls(
-            base_rates=base_rates,
-            projection_keys=experience.projection_keys,
-            claim_type_col=experience.claim_type_col,
-            exposure=exposure,
-            horizon=horizon,
-            trend=trend,
-            seasonality=seasonality,
-            credibility=credibility,
-            complement_basis=complement_basis,
-            rate_loads=rate_loads,
-            exposure_col=exposure_col,
-            exposure_period_col=exposure_period_col,
-            dates=dates,
-        )
 
     def _model(self) -> ProjectionModel:
         assumptions = AssumptionSet(self.trend)
@@ -582,3 +588,162 @@ class ClaimProjection:
             self.horizon,
             scenarios=scenarios,
         )
+
+def project(
+    exp: Experience,
+    *,
+    exposure: pd.DataFrame,
+    horizon: ProjectionHorizon,
+    trend: TrendAssumption,
+    seasonality: SeasonalityAssumption | None = None,
+    credibility: CredibilityAssumption | None = None,
+    completion: CompletionAssumption | None = None,
+    complement: Assumption | Any | None = None,
+    complement_basis: str | pd.Timestamp = "prospective",
+    rate_loads: Any = (),
+    grain: str | Iterable[str] | None = None,
+    claim_type: str | None = None,
+    extra_record_cols: Iterable[str] = (),
+    claims_col: str | None = None,
+    exposure_col: str | None = None,
+    exposure_period_col: str = "projection_period",
+    dates: ProjectionDates | None = None,
+) -> ClaimProjection:
+    """Build a :class:`ClaimProjection` from the canonical Experience.
+
+    The single projection entrypoint: takes an :class:`actuarialpy.Experience`
+    plus only the concepts this package owns -- the assumptions, the horizon,
+    and the prospective exposure. Named parameters *are* the pipeline phases;
+    ordering (complete, deseasonalize, aggregate, trend / blend) is fixed and
+    never inferred from a list.
+
+    ``grain`` defaults to the Experience's bound ``dimensions``. Of the grain
+    columns, the ones present in ``exposure`` are the projection keys (rates
+    join to exposure on them); the one absent is the claim-type dimension
+    (rates vary by it, exposure does not). Pass ``claim_type=`` when the split
+    is ambiguous.
+    """
+    # A wide Experience (built with a wide_by= Measures spec) melts itself:
+    # the recorded pivot has one structural inverse.
+    if exp.pivots:
+        recorded = {p.by: p for p in exp.pivots}
+        if claim_type is not None and claim_type in recorded:
+            chosen = recorded[claim_type]
+        elif len(recorded) == 1:
+            chosen = next(iter(recorded.values()))
+        else:
+            raise ValidationError(
+                f"multiple recorded pivots {sorted(recorded)}; pass claim_type= "
+                "naming the one to project by"
+            )
+        if claims_col is not None and claims_col != chosen.value:
+            raise ValidationError(
+                f"claims_col={claims_col!r} is not the recorded pivot's value "
+                f"column ({chosen.value!r}); melt or reshape explicitly before "
+                "projecting a non-pivot measure"
+            )
+        other_expense = [c for c in exp.expense if c not in chosen.columns]
+        if other_expense:
+            warnings.warn(
+                f"claim projection uses the {chosen.by!r} pivot columns "
+                f"{list(chosen.columns)}; other expense columns {other_expense} "
+                "are excluded",
+                stacklevel=2,
+            )
+        exp = exp.melt(chosen.by)
+        claim_type = chosen.by
+        claims_col = chosen.value
+
+    if isinstance(completion, str):
+        raise ValidationError(
+            "completion cannot be estimated from the bound history alone -- it "
+            "needs origin/valuation development columns. Call "
+            "projectionmodels.integrations.actuarialpy.estimate_completion(...) "
+            "and pass the resulting assumption."
+        )
+    if isinstance(seasonality, str):
+        if seasonality != "estimate":
+            raise ValidationError(
+                f"unknown seasonality sentinel {seasonality!r}; use 'estimate', "
+                "a SeasonalityAssumption, or a Series/mapping of factors"
+            )
+        from .integrations.actuarialpy import estimate_seasonality
+
+        season_value = claims_col if claims_col is not None else single_role(exp.expense, "expense")
+        season_by = [claim_type] if claim_type is not None and claim_type in exp.data.columns else None
+        seasonality = estimate_seasonality(
+            "seasonality",
+            exp.data,
+            date_col=resolve_date(exp),
+            value_col=season_value,
+            exposure_col=single_role_or_none(exp.exposure),
+            by=season_by,
+        )
+
+    trend = _coerce_trend(trend)
+    completion = _coerce_completion(completion)
+    seasonality = _coerce_seasonality(seasonality)
+    credibility = _coerce_credibility(credibility)
+    if exposure_col is None:
+        bound = single_role(exp.exposure, "exposure")
+        if bound in exposure.columns:
+            exposure_col = bound
+        elif "exposure" in exposure.columns:
+            exposure_col = "exposure"
+        else:
+            raise ValidationError(
+                f"no exposure column found in the exposure frame (looked for the "
+                f"bound role {bound!r} and 'exposure'); pass exposure_col=... -- "
+                f"the frame has columns {list(exposure.columns)}"
+            )
+    grain_cols = list(_as_tuple(grain)) if grain is not None else list(exp.dimensions)
+    if not grain_cols:
+        raise ValidationError(
+            "no record grain: bind dimensions=... on the Experience or pass grain=[...]"
+        )
+    if claim_type is None:
+        absent = [column for column in grain_cols if column not in exposure.columns]
+        if len(absent) == 1:
+            claim_type = absent[0]
+        elif not absent:
+            raise ValidationError(
+                "every grain column appears in exposure; pass claim_type= to name "
+                "the rate dimension exposure does not vary by"
+            )
+        else:
+            raise ValidationError(
+                f"grain columns {absent} are absent from exposure; pass claim_type= "
+                "to name the claim-type dimension (the others must join to exposure)"
+            )
+    elif claim_type not in grain_cols:
+        raise ValidationError(f"claim_type {claim_type!r} is not a grain column {grain_cols}")
+    projection_keys = [column for column in grain_cols if column != claim_type]
+    if not projection_keys:
+        raise ValidationError(
+            "grain needs at least one projection key besides the claim-type dimension"
+        )
+
+    rates = base_rates(
+        exp,
+        grain=[*projection_keys, claim_type],
+        completion=completion,
+        seasonality=seasonality,
+        complement=complement,
+        extra_record_cols=extra_record_cols,
+        claims_col=claims_col,
+    )
+    return ClaimProjection(
+        base_rates=rates,
+        projection_keys=projection_keys,
+        claim_type_col=claim_type,
+        exposure=exposure,
+        horizon=horizon,
+        trend=trend,
+        seasonality=seasonality,
+        credibility=credibility,
+        complement_basis=complement_basis,
+        rate_loads=rate_loads,
+        exposure_col=exposure_col,
+        exposure_period_col=exposure_period_col,
+        dates=dates,
+    )

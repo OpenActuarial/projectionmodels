@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.7.0] - 2026-07-11
+
+Project from the canonical Experience (breaking).
+
+- Remove `ClaimExperience`; the projection pipeline consumes
+  `actuarialpy.Experience` directly.
+- Add `project(exp, ...)`: the single projection entrypoint. Named parameters
+  are the pipeline phases (completion, seasonality, trend, credibility,
+  complement); record grain defaults to the Experience's bound `dimensions`,
+  and the claim-type dimension is inferred as the grain column absent from
+  the exposure frame (pass `claim_type=` when ambiguous).
+- Add `base_rates(exp, ...)` and `prepare_experience(exp, ...)` as public
+  steps of the same pipeline; `ClaimProjection` is unchanged as the engine
+  and `ClaimProjection.from_experience` is removed in favor of `project`.
+- Requires `actuarialpy>=0.45`.
+- `project()` coerces raw assumption values (scalar trend and credibility,
+  Series/mapping completion and seasonality) into assumption objects, and
+  resolves the exposure frame's column from the bound exposure role name.
+- `project()` consumes wide `from_tables` Experiences directly: the recorded
+  pivot melts itself into the claim-type dimension, non-pivot expense columns
+  are announced as excluded, and ambiguity asks for `claim_type=`.
+- `seasonality="estimate"` fits factors from the bound history via
+  `estimate_seasonality`; `completion="estimate"` explains what development
+  columns estimation needs instead of guessing.
+
 ## [0.6.5] - 2026-07-11
 
 ### Changed
