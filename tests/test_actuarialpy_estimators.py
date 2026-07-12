@@ -129,10 +129,24 @@ def test_actuarialpy_estimated_completion_can_be_applied(completion_transactions
 
 
 def test_tests_use_the_installed_actuarialpy_package():
+    import importlib.metadata
     import importlib.util
+    import re
     from pathlib import Path
 
-    assert ap.__version__.startswith(("0.41.", "0.42.", "0.43.", "0.44."))
+    # The installed actuarialpy must satisfy the floor this package declares --
+    # derived from the pin, not hardcoded, so bumping the floor can't strand
+    # this guard on a stale range.
+    requirement = next(
+        r for r in importlib.metadata.requires("projectionmodels")
+        if r.startswith("actuarialpy")
+    )
+    floor = re.search(r">=\s*([0-9][0-9.]*)", requirement).group(1)
+    installed = tuple(int(p) for p in ap.__version__.split(".")[:3])
+    minimum = tuple(int(p) for p in floor.split(".")[:3])
+    assert installed >= minimum, (
+        f"installed actuarialpy {ap.__version__} is below the declared floor {floor}"
+    )
     assert ap.__file__ is not None
     # The imported module must be the one the import system resolves — an
     # injected fake (a bare ModuleType in sys.modules) fails this — and it
