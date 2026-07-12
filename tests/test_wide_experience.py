@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from actuarialpy import Experience, Measures
+from actuarialpy import Experience, Source
 
 import projectionmodels as pm
 
@@ -16,14 +16,14 @@ def _wide(extra_expense=False, months=24):
          "paid_amount": base * (1.0 + 0.1 * np.cos(2 * np.pi * (t.month - 1) / 12))}
         for t in idx for ct, base in (("inpatient", 30_000.0), ("outpatient", 12_000.0))
     ])
-    tables = [Measures(lines, expense="paid_amount", wide_by="claim_type",
+    sources = [Source(lines, expense="paid_amount", wide_by="claim_type",
                        date="incurred_date")]
     if extra_expense:
         fees = pd.DataFrame([{"group_id": "A", "month": t, "admin_fee": 900.0} for t in idx])
-        tables.append(Measures(fees, expense="admin_fee"))
+        sources.append(Source(fees, expense="admin_fee"))
     return Experience.from_tables(
         membership, grain=["group_id", "month"], exposure="member_months",
-        tables=tables, date="month", period="M", dimensions="group_id",
+        sources=sources, date="month", period="M", dimensions="group_id",
         valuation_date=idx[-1] + pd.offsets.MonthEnd(0))
 
 

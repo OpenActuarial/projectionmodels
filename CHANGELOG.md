@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+`project()` accepts an `ExperienceSet` (routes to `tab`). Test fixtures
+updated for the `Measures` -> `Source` rename in actuarialpy 0.46.
 ## [0.7.0] - 2026-07-11
 
 Project from the canonical Experience (breaking).

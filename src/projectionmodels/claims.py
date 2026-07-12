@@ -623,7 +623,11 @@ def project(
     (rates vary by it, exposure does not). Pass ``claim_type=`` when the split
     is ambiguous.
     """
-    # A wide Experience (built with a wide_by= Measures spec) melts itself:
+    from actuarialpy import ExperienceSet
+
+    if isinstance(exp, ExperienceSet):
+        exp = exp.tab
+    # A wide Experience (built with a wide_by= Source spec) melts itself:
     # the recorded pivot has one structural inverse.
     if exp.pivots:
         recorded = {p.by: p for p in exp.pivots}
