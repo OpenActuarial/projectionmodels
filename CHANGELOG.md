@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1
+
+Compatibility patch; no library-code changes.
+
+- Cap the actuarialpy requirement at the next minor: `>=0.46,<0.47`.
+- Declare Python 3.14 support in the classifiers.
+- Fix one test fixture that used `freq="ME"` (pandas>=2.2 only) to literal
+  month-end dates, so the suite runs at the declared pandas floor. Found by
+  the new minimum-dependency CI job.
+
 ## 0.8.0
 
 `project()` accepts an `ExperienceSet` (routes to `tab`). Test fixtures

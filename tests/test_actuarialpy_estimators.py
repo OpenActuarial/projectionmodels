@@ -148,10 +148,16 @@ def test_tests_use_the_installed_actuarialpy_package():
         f"installed actuarialpy {ap.__version__} is below the declared floor {floor}"
     )
     assert ap.__file__ is not None
-    # The imported module must be the one the import system resolves — an
-    # injected fake (a bare ModuleType in sys.modules) fails this — and it
-    # must not live inside this repository.
+    # The imported module must be the one the import system resolves (an
+    # injected fake in sys.modules would fail this) and must not resolve from
+    # THIS repo's own source tree -- i.e. a vendored or stray copy under src/.
+    # A venv created inside the checkout dir is fine (the min-deps CI job does
+    # exactly that); an installed package lives in site-packages, not src/.
     spec = importlib.util.find_spec("actuarialpy")
     assert spec is not None and spec.origin is not None
-    assert Path(ap.__file__).resolve() == Path(spec.origin).resolve()
-    assert "projectionmodels" not in Path(ap.__file__).resolve().parts
+    ap_path = Path(ap.__file__).resolve()
+    assert ap_path == Path(spec.origin).resolve()
+    repo_src = (Path(__file__).resolve().parent.parent / "src").resolve()
+    assert not ap_path.is_relative_to(repo_src), (
+        f"actuarialpy resolved from this repository's source tree: {ap_path}"
+    )

@@ -46,7 +46,9 @@ def test_adjustment_effective_to_and_audit_identifiers():
             "scenario": ["s"] * 3,
             "projection_period": ["2027-01", "2027-02", "2027-03"],
             "period_start": pd.date_range("2027-01-01", periods=3, freq="MS"),
-            "period_end": pd.date_range("2027-01-31", periods=3, freq="ME"),
+            # explicit month-ends: freq="ME" needs pandas>=2.2, freq="M" is
+            # deprecated there -- literal dates work on every supported pandas
+            "period_end": pd.to_datetime(["2027-01-31", "2027-02-28", "2027-03-31"]),
         }
     )
     adjustment = Adjustment(
