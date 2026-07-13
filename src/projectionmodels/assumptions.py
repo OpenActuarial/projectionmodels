@@ -78,6 +78,38 @@ class Assumption:
                 )
         elif self.value_col is None:
             object.__setattr__(self, "value_col", self.name)
+        self._check_domain()
+
+    def _domain_values(self) -> np.ndarray | None:
+        """Numeric values for domain checking, or ``None`` if not numeric.
+
+        Pulls the scalar, the Series values, or the DataFrame ``value_col`` and
+        coerces to float; a non-numeric payload returns ``None`` so structural
+        (not domain) validation governs it.
+        """
+        vals = self.values
+        try:
+            if isinstance(vals, pd.DataFrame):
+                col = self.value_col or self.name
+                if col not in vals.columns:
+                    return None
+                return np.asarray(vals[col], dtype=float)
+            if isinstance(vals, pd.Series):
+                return np.asarray(vals, dtype=float)
+            if np.isscalar(vals):
+                return np.asarray([vals], dtype=float)
+            return np.asarray(vals, dtype=float)
+        except (TypeError, ValueError):
+            return None
+
+    def _check_domain(self) -> None:
+        """Hook for specialized assumptions to validate their value domain.
+
+        The base assumption imposes no domain (a raw named value can be
+        anything); subclasses override this to reject supplied values outside
+        their admissible range at construction time.
+        """
+        return
 
     @property
     def selected_values(self) -> Any:
@@ -206,6 +238,15 @@ class Assumption:
 class TrendAssumption(Assumption):
     """Annual trend rate, supplied or fitted with :func:`actuarialpy.fit_trend`."""
 
+    def _check_domain(self) -> None:
+        arr = self._domain_values()
+        if arr is None or arr.size == 0:
+            return
+        if not np.all(np.isfinite(arr)) or np.any(arr <= -1.0):
+            raise ValidationError(
+                f"trend assumption {self.name!r} must be a finite rate greater than -1"
+            )
+
     @classmethod
     def from_values(
         cls,
@@ -312,6 +353,15 @@ class SeasonalityAssumption(Assumption):
 
     season_col: str = "season"
     frequency: str = "M"
+
+    def _check_domain(self) -> None:
+        arr = self._domain_values()
+        if arr is None or arr.size == 0:
+            return
+        if not np.all(np.isfinite(arr)) or np.any(arr <= 0.0):
+            raise ValidationError(
+                f"seasonality assumption {self.name!r} must be finite and strictly positive"
+            )
 
     @classmethod
     def from_values(
@@ -420,6 +470,15 @@ class CompletionAssumption(Assumption):
     """Claim completion factors in the divide convention, supplied or estimated."""
 
     development_col: str = "development_month"
+
+    def _check_domain(self) -> None:
+        arr = self._domain_values()
+        if arr is None or arr.size == 0:
+            return
+        if not np.all(np.isfinite(arr)) or np.any(arr <= 0.0) or np.any(arr > 1.0):
+            raise ValidationError(
+                f"completion assumption {self.name!r} must lie in (0, 1] (divide convention)"
+            )
 
     @classmethod
     def from_values(
@@ -553,6 +612,15 @@ class CompletionAssumption(Assumption):
 @dataclass(frozen=True)
 class CredibilityAssumption(Assumption):
     """Credibility weights supplied or estimated by actuarialpy."""
+
+    def _check_domain(self) -> None:
+        arr = self._domain_values()
+        if arr is None or arr.size == 0:
+            return
+        if not np.all(np.isfinite(arr)) or np.any(arr < 0.0) or np.any(arr > 1.0):
+            raise ValidationError(
+                f"credibility assumption {self.name!r} must lie in [0, 1]"
+            )
 
     @classmethod
     def from_weights(
